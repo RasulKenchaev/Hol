@@ -1,0 +1,24 @@
+{
+  "name": "Лаҳҷаҳои Тоҷикистон",
+  "short_name": "Лаҳҷа",
+  "description": "Барномаи таҳлили лаҳҷаҳои тоҷикӣ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#c0392b",
+  "theme_color": "#c0392b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

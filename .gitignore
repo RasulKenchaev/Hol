@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+.api_key
+.license
+.update_config
+.admin_contact
+*.log
+bin/
+.buildozer/

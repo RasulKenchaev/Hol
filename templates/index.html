@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="tg" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#c0392b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Лаҳҷа">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<title>Лаҳҷаҳои Тоҷикистон</title>
+<style>
+  :root {
+    --red:    #c0392b; --red-l:  #fff0f0; --red-d:  #922b21;
+    --green:  #27ae60; --green-l:#f0fff4;
+    --blue:   #2980b9; --blue-l: #f0f4ff;
+    --gold:   #f39c12; --gold-l: #fffde8;
+    --purple: #8e44ad;
+    --bg:     #f5f5f5; --card:   #ffffff;
+    --text:   #222;    --text2:  #555;    --text3:  #999;
+    --radius: 14px;    --shadow: 0 2px 12px rgba(0,0,0,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Сарлавҳа ── */
+  header {
+    background: linear-gradient(135deg, var(--red-d), var(--red));
+    color: #fff; padding: 14px 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  header .flag { font-size: 26px; }
+  header h1 { font-size: 17px; font-weight: 700; line-height: 1.2; }
+  header p  { font-size: 11px; opacity: .8; }
+
+  /* ── Асосӣ ── */
+  main { padding: 12px; display: flex; flex-direction: column; gap: 12px; max-width: 600px; margin: 0 auto; }
+
+  /* ── Кард ── */
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .card-header {
+    padding: 10px 14px; font-size: 13px; font-weight: 700;
+    border-bottom: 1px solid rgba(0,0,0,.07);
+  }
+  .card-body { padding: 12px 14px; }
+
+  /* ── Ворид ── */
+  .card-input .card-header { background: var(--red-l); color: var(--red-d); }
+  .char-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .char-btn {
+    background: #f0eeff; color: var(--red-d); border: 1px solid #c9b8f0;
+    border-radius: 8px; padding: 8px 11px; font-size: 18px; font-weight: 700;
+    cursor: pointer; line-height: 1; touch-action: manipulation;
+    transition: background .15s;
+  }
+  .char-btn:active { background: #ddd0ff; }
+  textarea {
+    width: 100%; border: 1.5px solid #ddd; border-radius: 10px;
+    padding: 12px; font-size: 16px; font-family: inherit;
+    resize: none; outline: none; background: var(--red-l);
+    color: var(--text); line-height: 1.6;
+    transition: border-color .2s;
+  }
+  textarea:focus { border-color: var(--red); }
+  .char-count { font-size: 11px; color: var(--text3); text-align: right; margin-top: 4px; }
+
+  /* ── Тугмаҳои амал ── */
+  .action-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1; padding: 13px 10px; border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    touch-action: manipulation; transition: opacity .15s, transform .1s;
+  }
+  .btn:active { opacity: .8; transform: scale(.97); }
+  .btn-clear  { background: #fde; color: var(--red-d); }
+  .btn-ai     { background: linear-gradient(135deg,#8e44ad,#6c3483); color: #fff; }
+  .btn-add    { background: linear-gradient(135deg,#e67e22,#d35400); color: #fff; }
+
+  /* ── Натиҷа ── */
+  .card-result .card-header { background: var(--blue-l); color: var(--blue); }
+
+  .winner-box {
+    background: linear-gradient(135deg, #eaf2ff, #d6eaf8);
+    border-radius: 10px; padding: 14px; text-align: center; margin-bottom: 12px;
+  }
+  .winner-label { font-size: 10px; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; }
+  .winner-name  { font-size: 22px; font-weight: 800; color: var(--blue); margin: 4px 0 2px; }
+  .winner-region{ font-size: 12px; color: var(--text2); }
+  .winner-conf  { font-size: 13px; font-weight: 700; color: var(--gold); margin-top: 6px; }
+
+  .dialect-list { display: flex; flex-direction: column; gap: 8px; }
+  .dialect-item { }
+  .dialect-row  { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+  .dialect-name { font-size: 13px; font-weight: 600; }
+  .dialect-region{ font-size: 10px; color: var(--text3); }
+  .dialect-pct  { font-size: 13px; font-weight: 700; color: var(--text2); }
+  .bar-bg   { height: 7px; background: #e8e8ee; border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; background: var(--blue); transition: width .4s ease; }
+  .bar-fill.winner { background: linear-gradient(90deg, var(--red), var(--gold)); }
+
+  /* ── Калима ── */
+  .card-words .card-header { background: var(--green-l); color: #1a6b3a; }
+  .word-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 13px; padding: 5px 10px; border-radius: 20px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .chip.found   { background: #d5f5e3; color: #1a6b3a; }
+  .chip.unknown { background: #fde8e8; color: #922b21; }
+  .chip-tag { font-size: 10px; opacity: .7; }
+  .word-stat { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+
+  /* ── AI ── */
+  .ai-box {
+    background: linear-gradient(135deg,#1a0a2e,#2d1060);
+    border-radius: var(--radius); padding: 14px; color: #e8d8ff;
+    font-size: 14px; line-height: 1.7; white-space: pre-wrap;
+    display: none;
+  }
+  .ai-box.visible { display: block; }
+  .ai-title { font-size: 12px; color: #9060cc; margin-bottom: 8px; font-weight: 700; }
+
+  /* ── API Key диалог ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    z-index: 200; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #1a0a2e; border-radius: 18px; padding: 24px;
+    width: min(90vw, 380px); color: #e0c0ff;
+  }
+  .modal h2 { font-size: 17px; margin-bottom: 8px; color: #d0a0ff; }
+  .modal p  { font-size: 12px; color: #9060cc; margin-bottom: 12px; }
+  .modal input {
+    width: 100%; background: #0f0720; border: 1px solid #6030aa;
+    border-radius: 8px; padding: 12px; color: #e0c0ff;
+    font-size: 14px; font-family: monospace; outline: none; margin-bottom: 12px;
+  }
+  .modal-btns { display: flex; gap: 8px; }
+  .modal-btns button {
+    flex: 1; padding: 12px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .btn-save   { background: #6020a0; color: #fff; }
+  .btn-cancel { background: #2d1060; color: #c090ff; }
+
+  /* ── Калима илова ── */
+  .add-modal .modal { background: #fff; color: #222; }
+  .add-modal .modal h2 { color: #b06010; }
+  .add-modal .modal p  { color: #888; }
+  .add-modal select, .add-modal input[type=text] {
+    width: 100%; border: 1.5px solid #ddd; border-radius: 8px;
+    padding: 11px; font-size: 15px; font-family: inherit;
+    margin-bottom: 10px; outline: none; background: #fafafa;
+  }
+  .add-modal select:focus, .add-modal input[type=text]:focus { border-color: #e07020; }
+  .add-modal .btn-save { background: #d35400; }
+  .add-modal .btn-cancel { background: #f5e6d5; color: #d35400; }
+
+  /* ── Холӣ ── */
+  .empty { text-align: center; color: var(--text3); font-size: 14px; padding: 20px 0; }
+
+  /* ── Spinning ── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 3px solid rgba(255,255,255,.3); border-top-color: #fff;
+    border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle;
+  }
+
+  /* ── Нусха / Вставит тугмаҳо ── */
+  .copy-btn {
+    background: rgba(255,255,255,.18); color: inherit;
+    border: 1px solid rgba(255,255,255,.3); border-radius: 7px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer;
+    touch-action: manipulation; transition: background .15s;
+    white-space: nowrap;
+  }
+  .copy-btn:active { background: rgba(255,255,255,.35); }
+  .copy-btn.dark {
+    background: rgba(0,0,0,.06); color: var(--text2);
+    border-color: rgba(0,0,0,.15);
+  }
+  .card-header { display: flex; align-items: center; justify-content: space-between; }
+  .card-header span { flex: 1; }
+
+  /* кнопка Вставит у textarea */
+  .paste-btn {
+    display: block; width: 100%; margin-top: 6px;
+    background: #e8f4ff; color: var(--blue); border: 1.5px dashed #90c0e8;
+    border-radius: 8px; padding: 9px; font-size: 13px; font-weight: 600;
+    cursor: pointer; touch-action: manipulation; text-align: center;
+    transition: background .15s;
+  }
+  .paste-btn:active { background: #d0eaff; }
+
+  /* AI text — интихоб карда шавад */
+  #aiText { user-select: text; -webkit-user-select: text; }
+  .ai-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ai-header .ai-title { margin: 0; }
+  .ai-copy { background: rgba(255,255,255,.12); color: #c090ff;
+    border: 1px solid rgba(255,255,255,.2); border-radius: 7px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .ai-copy:active { background: rgba(255,255,255,.25); }
+
+  /* Toast хабар */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: #222; color: #fff; padding: 10px 20px; border-radius: 20px;
+    font-size: 13px; z-index: 999; transition: transform .25s, opacity .25s;
+    opacity: 0; pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="flag">🇹🇯</span>
+  <div>
+    <h1>Лаҳҷаҳои Тоҷикистон</h1>
+    <p>Барномаи таҳлили лаҳҷа</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Ворид ── -->
+  <div class="card card-input">
+    <div class="card-header">📝  Матни лаҳҷавиро ворид намоед</div>
+    <div class="card-body">
+      <div class="char-bar" id="charBar"></div>
+      <textarea id="inputText" rows="5"
+        placeholder="Матнро инҷо нависед ё paste кунед…"></textarea>
+      <div class="char-count" id="charCount">0 ҳарф</div>
+      <button class="paste-btn" onclick="pasteFromClipboard()">📥  Аз буфер вставит кунед</button>
+      <div class="action-row">
+        <button class="btn btn-clear" onclick="clearAll()">✕ Тоза</button>
+        <button class="btn btn-ai"   onclick="doAI()">🤖 AI Таҳлил</button>
+        <button class="btn btn-add"  onclick="openAdd()">＋ Калима</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Натиҷа ── -->
+  <div class="card card-result" id="resultCard" style="display:none">
+    <div class="card-header">
+      <span>📊  Натиҷаи таҳлил</span>
+      <button class="copy-btn dark" onclick="copyResult()">📋 Нусха</button>
+    </div>
+    <div class="card-body">
+      <div class="winner-box" id="winnerBox">
+        <div class="winner-label">НАТИҶАИ МУАЙЯНШУДА</div>
+        <div class="winner-name"   id="winnerName">—</div>
+        <div class="winner-region" id="winnerRegion"></div>
+        <div class="winner-conf"   id="winnerConf"></div>
+      </div>
+      <div class="dialect-list" id="dialectList"></div>
+    </div>
+  </div>
+
+  <!-- ── Калимаҳо ── -->
+  <div class="card card-words" id="wordsCard" style="display:none">
+    <div class="card-header">🔍  Калимаҳои шинохташуда</div>
+    <div class="card-body">
+      <div class="word-stat" id="wordStat"></div>
+      <div class="word-chips" id="wordChips"></div>
+    </div>
+  </div>
+
+  <!-- ── AI ── -->
+  <div class="ai-box" id="aiBox">
+    <div class="ai-header">
+      <div class="ai-title">🤖 Зеҳни Сунъӣ — Claude AI</div>
+      <button class="ai-copy" onclick="copyAI()">📋 Нусха</button>
+    </div>
+    <span id="aiText"></span>
+  </div>
+
+</main>
+
+<!-- Toast хабар -->
+<div id="toast"></div>
+
+<!-- ── API Key Modal ── -->
+<div class="modal-overlay" id="apiModal">
+  <div class="modal">
+    <h2>🔑 Калиди Anthropic API</h2>
+    <p>Калидро аз console.anthropic.com гиред</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-…">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeApiModal()">Бекор</button>
+      <button class="btn-save"   onclick="saveApiKey()">✔ Захира</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Word Modal ── -->
+<div class="modal-overlay add-modal" id="addModal">
+  <div class="modal">
+    <h2>＋ Калимаи нав</h2>
+    <p>Калима ё иборае илова кунед</p>
+    <select id="addDialect">
+      {% for d in dialects %}
+      <option value="{{ d.key }}">{{ d.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" id="addLit"  placeholder="Калимаи адабӣ">
+    <input type="text" id="addDial" placeholder="Лаҳҷавӣ">
+    <div style="margin-bottom:12px;font-size:13px;color:#888">
+      <label><input type="radio" name="wtype" value="words" checked> Калима</label>
+      &nbsp;&nbsp;
+      <label><input type="radio" name="wtype" value="phrases"> Ҷумла</label>
+    </div>
+    <div id="addMsg" style="font-size:13px;min-height:18px;margin-bottom:8px"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeAdd()">Бекор</button>
+      <button class="btn-save"   onclick="saveWord()">✔ Илова</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── PWA Service Worker ──────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
+
+// ── Ҳарфҳои махсус ──────────────────────────────────────────────────────────
+const CHARS = ["ҷ","Ҷ","қ","Қ","ҳ","Ҳ","ғ","Ғ","ӯ","Ӯ","ӣ","Ӣ"];
+const bar = document.getElementById("charBar");
+CHARS.forEach(ch => {
+  const btn = document.createElement("button");
+  btn.className = "char-btn";
+  btn.textContent = ch;
+  btn.onclick = () => insertChar(ch);
+  bar.appendChild(btn);
+});
+
+function insertChar(ch) {
+  const ta = document.getElementById("inputText");
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  ta.value = ta.value.slice(0,s) + ch + ta.value.slice(e);
+  ta.selectionStart = ta.selectionEnd = s + ch.length;
+  ta.focus();
+  onInput();
+}
+
+// ── Воридот ─────────────────────────────────────────────────────────────────
+const ta = document.getElementById("inputText");
+let analyzeTimer = null;
+
+ta.addEventListener("input", onInput);
+function onInput() {
+  document.getElementById("charCount").textContent = ta.value.length + " ҳарф";
+  clearTimeout(analyzeTimer);
+  if (ta.value.trim()) {
+    analyzeTimer = setTimeout(analyze, 350);
+  } else {
+    clearResults();
+  }
+}
+
+// ── Таҳлил ──────────────────────────────────────────────────────────────────
+async function analyze() {
+  const text = ta.value.trim();
+  if (!text) return;
+  try {
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({text})
+    });
+    const data = await res.json();
+    renderResults(data);
+  } catch(e) { console.error(e); }
+}
+
+function renderResults(data) {
+  // Натиҷаи асосӣ
+  const rc = document.getElementById("resultCard");
+  rc.style.display = "";
+
+  if (data.winner) {
+    document.getElementById("winnerName").textContent   = data.winner.name;
+    document.getElementById("winnerRegion").textContent = data.winner.region;
+    const conf = Math.round(data.best_score / data.total * 100);
+    document.getElementById("winnerConf").textContent =
+      `Эҳтимол: ${conf}%  ·  ${data.best_score} калима`;
+  } else {
+    document.getElementById("winnerName").textContent   = "Лаҳҷа ёфт нашуд";
+    document.getElementById("winnerRegion").textContent = "";
+    document.getElementById("winnerConf").textContent   = "Луғатро пур кунед";
+  }
+
+  // Дарсадҳо
+  const list = document.getElementById("dialectList");
+  list.innerHTML = "";
+  data.results.forEach(r => {
+    if (r.score === 0) return;
+    const isWinner = data.winner && r.key === data.winner.key;
+    list.insertAdjacentHTML("beforeend", `
+      <div class="dialect-item">
+        <div class="dialect-row">
+          <span>
+            <span class="dialect-name">${r.name}</span>
+            <span class="dialect-region"> · ${r.region}</span>
+          </span>
+          <span class="dialect-pct" style="${isWinner?'color:#c0392b':''}">${r.pct}%</span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill ${isWinner?'winner':''}" style="width:${r.pct}%"></div>
+        </div>
+      </div>`);
+  });
+
+  // Калимаҳо
+  const wc = document.getElementById("wordsCard");
+  const chips = document.getElementById("wordChips");
+  const stat  = document.getElementById("wordStat");
+  if (data.word_results && data.word_results.length) {
+    wc.style.display = "";
+    chips.innerHTML  = "";
+    let found = 0;
+    data.word_results.forEach(w => {
+      const cls = w.dialects.length ? "found" : "unknown";
+      if (w.dialects.length) found++;
+      const tag = w.dialects.length ? w.dialects.slice(0,2).join(", ") : "номаълум";
+      chips.insertAdjacentHTML("beforeend",
+        `<span class="chip ${cls}">${w.word}<span class="chip-tag">${tag}</span></span>`);
+    });
+    stat.textContent = `${found}/${data.word_results.length} калима шинохта шуд`;
+  }
+}
+
+function clearResults() {
+  document.getElementById("resultCard").style.display = "none";
+  document.getElementById("wordsCard").style.display  = "none";
+  document.getElementById("aiBox").classList.remove("visible");
+}
+
+function clearAll() {
+  ta.value = "";
+  document.getElementById("charCount").textContent = "0 ҳарф";
+  clearResults();
+}
+
+// ── AI ──────────────────────────────────────────────────────────────────────
+let savedApiKey = localStorage.getItem("anthropic_key") || "";
+
+async function doAI() {
+  const text = ta.value.trim();
+  if (!text) { alert("Аввал матнро ворид намоед!"); return; }
+  if (!savedApiKey) { openApiModal(); return; }
+
+  const box  = document.getElementById("aiBox");
+  const aiTxt= document.getElementById("aiText");
+  box.classList.add("visible");
+  aiTxt.textContent = "⏳ Таҳлил дар ҷараён аст…";
+
+  try {
+    const res = await fetch("/api/ai_analyze", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({text, api_key: savedApiKey})
+    });
+    const data = await res.json();
+    if (data.error) {
+      aiTxt.textContent = "⚠ " + data.error;
+      if (data.error.includes("калид") || data.error.includes("API")) openApiModal();
+    } else {
+      aiTxt.textContent = data.result;
+    }
+  } catch(e) {
+    aiTxt.textContent = "⚠ Интернет кор намекунад";
+  }
+}
+
+// ── API Key ──────────────────────────────────────────────────────────────────
+function openApiModal() {
+  document.getElementById("apiKeyInput").value = savedApiKey;
+  document.getElementById("apiModal").classList.add("open");
+}
+function closeApiModal() {
+  document.getElementById("apiModal").classList.remove("open");
+}
+function saveApiKey() {
+  const k = document.getElementById("apiKeyInput").value.trim();
+  if (!k) return;
+  savedApiKey = k;
+  localStorage.setItem("anthropic_key", k);
+  closeApiModal();
+  doAI();
+}
+
+// ── Илова кардани калима ─────────────────────────────────────────────────────
+function openAdd() { document.getElementById("addModal").classList.add("open"); }
+function closeAdd() {
+  document.getElementById("addModal").classList.remove("open");
+  document.getElementById("addMsg").textContent = "";
+  document.getElementById("addLit").value  = "";
+  document.getElementById("addDial").value = "";
+}
+
+async function saveWord() {
+  const dk   = document.getElementById("addDialect").value;
+  const lit  = document.getElementById("addLit").value.trim();
+  const dial = document.getElementById("addDial").value.trim();
+  const type = document.querySelector("input[name=wtype]:checked").value;
+  const msg  = document.getElementById("addMsg");
+  if (!lit || !dial) { msg.style.color="#c00"; msg.textContent="⚠ Ҳарду майдонро пур кунед"; return; }
+  const res = await fetch("/api/add_word", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({dialect:dk, literary:lit, dialect_word:dial, type})
+  });
+  const data = await res.json();
+  if (data.ok) {
+    msg.style.color = "#1a6b3a";
+    msg.textContent = `✔ «${lit}» → «${dial}» илова шуд!`;
+    document.getElementById("addLit").value  = "";
+    document.getElementById("addDial").value = "";
+  } else {
+    msg.style.color = "#c00";
+    msg.textContent = "⚠ " + (data.error || "Хато");
+  }
+}
+
+// ── Пӯшидани modal бо клики берун ────────────────────────────────────────────
+document.querySelectorAll(".modal-overlay").forEach(el => {
+  el.addEventListener("click", e => { if (e.target === el) el.classList.remove("open"); });
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2000);
+}
+
+// ── Copy / Paste ──────────────────────────────────────────────────────────────
+function copyText(text) {
+  if (!text.trim()) return;
+  // navigator.clipboard кор мекунад танҳо дар HTTPS ё localhost
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast("✔ Нусха гирифта шуд"))
+      .catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const tmp = document.createElement("textarea");
+  tmp.value = text;
+  tmp.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+  document.body.appendChild(tmp);
+  tmp.focus(); tmp.select();
+  try {
+    document.execCommand("copy");
+    showToast("✔ Нусха гирифта шуд");
+  } catch(e) {
+    showToast("⚠ Нусха нашуд");
+  }
+  document.body.removeChild(tmp);
+}
+
+async function pasteFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      const text = await navigator.clipboard.readText();
+      const s = ta.selectionStart, e = ta.selectionEnd;
+      ta.value = ta.value.slice(0,s) + text + ta.value.slice(e);
+      ta.selectionStart = ta.selectionEnd = s + text.length;
+      ta.focus(); onInput();
+      showToast("✔ Вставит шуд");
+    } catch(e) {
+      showToast("⚠ Иҷозат диҳед — браузер барои paste иҷозат мехоҳад");
+    }
+  } else {
+    // Агар clipboard API нест — cursor гузоред ва Ctrl+V истифода баред
+    ta.focus();
+    showToast("Ctrl+V ё Long-press → Paste истифода баред");
+  }
+}
+
+function copyResult() {
+  const name   = document.getElementById("winnerName").textContent;
+  const region = document.getElementById("winnerRegion").textContent;
+  const conf   = document.getElementById("winnerConf").textContent;
+  const input  = document.getElementById("inputText").value.trim();
+  copyText(`Матн: ${input}\n\nЛаҳҷа: ${name}\nМинтақа: ${region}\n${conf}`);
+}
+
+function copyAI() {
+  copyText(document.getElementById("aiText").textContent);
+}
+</script>
+</body>
+</html>
