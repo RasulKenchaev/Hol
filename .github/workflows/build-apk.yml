@@ -13,20 +13,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Cache Buildozer global dir
+    - name: Cache Buildozer
       uses: actions/cache@v4
       with:
-        path: .buildozer_cache
-        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v4
-        restore-keys: buildozer-${{ runner.os }}-
+        path: .buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v5
 
-    - name: Build APK with Docker (kivy/buildozer)
-      run: |
-        docker run --rm \
-          -v "$PWD":/home/user/hostcwd \
-          -v "$PWD/.buildozer_cache":/home/user/.buildozer \
-          kivy/buildozer:latest \
-          android debug
+    - name: Build APK
+      uses: ArtemSBulgakov/buildozer-action@v1
+      with:
+        command: android debug
+        workdir: .
+        buildozer_version: stable
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
