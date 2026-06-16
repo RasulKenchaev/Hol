@@ -22,53 +22,40 @@ jobs:
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y \
-          git zip unzip \
+          git zip unzip wget curl \
           openjdk-17-jdk \
           python3-pip python3-venv \
           libffi-dev libssl-dev \
           autoconf automake libtool \
           build-essential ccache \
           libncurses5 libncurses5-dev \
-          zlib1g-dev libltdl-dev \
-          libgstreamer1.0-dev \
-          gstreamer1.0-plugins-base \
-          libgl1-mesa-dev libgles2-mesa-dev
+          zlib1g-dev libltdl-dev
 
     - name: Install Buildozer + Cython
       run: |
         pip install --upgrade pip wheel
-        pip install buildozer==1.5.0 cython==0.29.33
+        pip install buildozer cython==0.29.33
 
-    - name: Cache Buildozer global dir
+    - name: Cache Buildozer
       uses: actions/cache@v4
       with:
         path: ~/.buildozer
-        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v2
-        restore-keys: |
-          buildozer-${{ runner.os }}-
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v3
+        restore-keys: buildozer-${{ runner.os }}-
 
     - name: Cache Android SDK/NDK
       uses: actions/cache@v4
       with:
         path: ~/.android
-        key: android-sdk-${{ runner.os }}-v2
+        key: android-sdk-${{ runner.os }}-v3
 
-    - name: Build APK (debug)
-      run: |
-        set -e
-        export PATH="$PATH:$HOME/.local/bin"
-        buildozer -v android debug
+    - name: Build APK
+      run: buildozer -v android debug
 
-    - name: Upload APK artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: TajikDialect-APK
         path: bin/*.apk
         if-no-files-found: error
         retention-days: 30
-
-    - name: Show APK info
-      if: always()
-      run: |
-        echo "=== bin/ contents ==="
-        ls -lh bin/ 2>/dev/null || echo "bin/ папка нест"
