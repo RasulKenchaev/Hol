@@ -2,7 +2,7 @@
 Лаҳҷаҳои Тоҷикистон — Kivy/KivyMD
 Android • macOS • Windows • Linux
 """
-import os, sys
+import os, sys, threading
 
 # Android: маълумотҳоро дар storage нигоҳ медорем
 _IS_ANDROID = "ANDROID_ARGUMENT" in os.environ
@@ -241,6 +241,16 @@ KV = """
             size_hint_y: None
             height: dp(110)
 
+        MDLabel:
+            id: voice_status
+            text: ""
+            font_style: "Caption"
+            theme_text_color: "Custom"
+            text_color: 0.26, 0.65, 1, 1
+            halign: "center"
+            size_hint_y: None
+            height: dp(18)
+
         # Тугмаҳо
         MDBoxLayout:
             size_hint_y: None
@@ -251,6 +261,13 @@ KV = """
                 md_bg_color: app.theme_cls.primary_color
                 on_release: root.analyze()
                 size_hint_x: 2
+            MDRaisedButton:
+                id: mic_btn
+                text: "🎤"
+                md_bg_color: 0.15, 0.45, 0.85, 1
+                on_release: root.start_voice()
+                size_hint_x: None
+                width: dp(50)
             MDRaisedButton:
                 text: "✕  Тоза"
                 md_bg_color: 0.55, 0.1, 0.1, 1
@@ -414,6 +431,62 @@ KV = """
 
 Builder.load_string(KV)
 
+# ── Харитаи номи ҳарфҳо → ҳарфи тоҷикӣ ────────────────────────────────────
+_CHAR_NAMES = {
+    "қоф": "қ", "қаф": "қ", "qof": "қ", "qaf": "қ",
+    "ҷим": "ҷ", "ҷем": "ҷ", "jim": "ҷ",
+    "ии": "ӣ", "ии борик": "ӣ", "и борик": "ӣ",
+    "ҳе": "ҳ", "ҳо": "ҳ",
+    "ғайн": "ғ", "ғаин": "ғ", "ghayn": "ғ",
+    "уу": "ӯ", "уу гурда": "ӯ", "у гурда": "ӯ",
+    "це": "қ", "же": "ҷ", "ха": "ҳ", "хе": "ҳ",
+}
+_CYR_CORRECTIONS = [
+    ("дж", "ҷ"), ("дз", "ҷ"),
+    ("гх", "ғ"), ("гь", "ғ"),
+    ("хх", "ҳ"),
+]
+_LAT2CYR = [
+    ("gh", "ғ"), ("kh", "х"), ("sh", "ш"), ("ch", "ч"),
+    ("zh", "ж"), ("ts", "тс"), ("yo", "ё"),
+    ("ii", "ӣ"), ("uu", "ӯ"),
+    ("a", "а"), ("b", "б"), ("d", "д"), ("e", "е"), ("f", "ф"),
+    ("g", "г"), ("h", "ҳ"), ("i", "и"), ("j", "ҷ"), ("k", "к"),
+    ("l", "л"), ("m", "м"), ("n", "н"), ("o", "о"), ("p", "п"),
+    ("q", "қ"), ("r", "р"), ("s", "с"), ("t", "т"), ("u", "у"),
+    ("v", "в"), ("w", "в"), ("x", "х"), ("y", "й"), ("z", "з"),
+]
+
+_VOICE_REQUEST = 1001  # Android Activity request code
+
+
+def _to_cyrillic(text: str) -> str:
+    cyr = sum(1 for c in text if "Ѐ" <= c <= "ӿ")
+    lat = sum(1 for c in text if c.isalpha() and c.isascii())
+    if cyr >= lat:
+        return text
+    result, tl, i = [], text.lower(), 0
+    while i < len(tl):
+        matched = False
+        for ls, cc in _LAT2CYR:
+            if tl[i:i + len(ls)] == ls:
+                result.append(cc.upper() if text[i].isupper() else cc)
+                i += len(ls); matched = True; break
+        if not matched:
+            result.append(text[i]); i += 1
+    return "".join(result)
+
+
+def _post_process_voice(text: str) -> str:
+    t = text.strip()
+    key = t.lower()
+    if key in _CHAR_NAMES:
+        return _CHAR_NAMES[key]
+    t = _to_cyrillic(t)
+    for wrong, right in _CYR_CORRECTIONS:
+        t = t.replace(wrong, right)
+    return t
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Экранҳо
@@ -573,6 +646,110 @@ class AnalysisTab(MDScreen):
         self.ids.lbl_result.text = "[color=888888]Матнро ворид кунед ва «Таҳлил»-ро пахш кунед…[/color]"
         self.ids.card_best.opacity = 0
         self.ids.scores_row.clear_widgets()
+        self.ids.voice_status.text = ""
+
+    # ── Вуруди овозӣ ─────────────────────────────────────────────────────────
+
+    def start_voice(self):
+        if _IS_ANDROID:
+            self._start_android_voice()
+        else:
+            self._start_desktop_voice()
+
+    def _set_mic_state(self, recording: bool):
+        btn = self.ids.mic_btn
+        if recording:
+            btn.text = "🔴"
+            btn.md_bg_color = (0.75, 0.1, 0.1, 1)
+            self.ids.voice_status.text = "Гӯш мекунам…"
+        else:
+            btn.text = "🎤"
+            btn.md_bg_color = (0.15, 0.45, 0.85, 1)
+            self.ids.voice_status.text = ""
+
+    def _insert_voice_text(self, text: str):
+        text = _post_process_voice(text)
+        cur = self.ids.inp_text.text.strip()
+        self.ids.inp_text.text = (cur + " " + text).strip() if cur else text
+        self.ids.voice_status.text = f"✔  «{text}»"
+
+    # Android ─────────────────────────────────────────────────────────────────
+    def _start_android_voice(self):
+        try:
+            from android.permissions import request_permissions, check_permission, Permission  # type: ignore
+            if not check_permission(Permission.RECORD_AUDIO):
+                request_permissions([Permission.RECORD_AUDIO],
+                                    callback=lambda perms, grants: self._start_android_voice()
+                                    if grants and grants[0] else None)
+                return
+
+            from jnius import autoclass  # type: ignore
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            Intent         = autoclass("android.content.Intent")
+            RI             = autoclass("android.speech.RecognizerIntent")
+
+            intent = Intent(RI.ACTION_RECOGNIZE_SPEECH)
+            intent.putExtra(RI.EXTRA_LANGUAGE_MODEL, RI.LANGUAGE_MODEL_FREE_FORM)
+            intent.putExtra(RI.EXTRA_LANGUAGE, "tg-TJ")
+            intent.putExtra(RI.EXTRA_LANGUAGE_PREFERENCE, "tg-TJ")
+            intent.putExtra(RI.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, False)
+            intent.putExtra(RI.EXTRA_PROMPT, "Гап занед…")
+            intent.putExtra(RI.EXTRA_MAX_RESULTS, 1)
+            PythonActivity.mActivity.startActivityForResult(intent, _VOICE_REQUEST)
+            self._set_mic_state(True)
+        except Exception as e:
+            self.ids.voice_status.text = f"⚠  {e}"
+
+    # Desktop ─────────────────────────────────────────────────────────────────
+    def _start_desktop_voice(self):
+        self._set_mic_state(True)
+
+        def _listen():
+            text = None
+            try:
+                import speech_recognition as sr
+                r = sr.Recognizer()
+                r.energy_threshold = 300
+                r.dynamic_energy_threshold = True
+                with sr.Microphone() as src:
+                    r.adjust_for_ambient_noise(src, duration=0.4)
+                    audio = r.listen(src, timeout=8, phrase_time_limit=15)
+
+                # Whisper
+                try:
+                    from faster_whisper import WhisperModel  # type: ignore
+                    if not hasattr(AnalysisTab, "_wmodel"):
+                        AnalysisTab._wmodel = WhisperModel("tiny", device="cpu",
+                                                           compute_type="int8")
+                    import tempfile
+                    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+                    tmp.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
+                    tmp.close()
+                    segs, _ = AnalysisTab._wmodel.transcribe(tmp.name, language="tg", beam_size=5)
+                    text = " ".join(s.text.strip() for s in segs).strip()
+                    os.unlink(tmp.name)
+                except Exception:
+                    pass
+
+                # Google fallback
+                if not text:
+                    for lang in ("tg-TJ", "ru-RU"):
+                        try:
+                            text = r.recognize_google(audio, language=lang); break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+            def _done():
+                self._set_mic_state(False)
+                if text:
+                    self._insert_voice_text(text)
+                else:
+                    self.ids.voice_status.text = "⚠  Ҳеҷ чиз нашунидам"
+            Clock.schedule_once(lambda dt: _done(), 0)
+
+        threading.Thread(target=_listen, daemon=True).start()
 
 
 class DialectsTab(MDScreen):
@@ -714,11 +891,35 @@ class TajikDialectApp(MDApp):
         self.theme_cls.primary_palette = "Blue"
         self.theme_cls.accent_palette  = "Red"
 
+        if _IS_ANDROID:
+            try:
+                from android import activity  # type: ignore
+                activity.bind(on_activity_result=self._on_activity_result)
+            except Exception:
+                pass
+
         sm = MDScreenManager()
         sm.add_widget(LoginScreen(name="login"))
         sm.add_widget(MainScreen(name="main"))
         sm.current = "login"
         return sm
+
+    def _on_activity_result(self, request_code, result_code, data):
+        if request_code != _VOICE_REQUEST:
+            return
+        RESULT_OK = -1
+        try:
+            main = self.root.get_screen("main")
+            tab  = main.ids.tab_mgr.get_screen("analysis")
+            tab._set_mic_state(False)
+            if result_code == RESULT_OK and data:
+                from jnius import autoclass  # type: ignore
+                results = data.getStringArrayListExtra("android.speech.extra.RESULTS")
+                if results and results.size() > 0:
+                    Clock.schedule_once(
+                        lambda dt: tab._insert_voice_text(results.get(0)), 0)
+        except Exception as e:
+            pass
 
 
 if __name__ == "__main__":

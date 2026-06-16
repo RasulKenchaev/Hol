@@ -1,21 +1,44 @@
+import sys, io
+
+# Windows: stdout/stderr-ро ба UTF-8 мегузорем то кириллика дуруст кор кунад
+if sys.platform == "win32":
+    for _s in ("stdout", "stderr"):
+        _st = getattr(sys, _s, None)
+        if _st and hasattr(_st, "buffer"):
+            setattr(sys, _s,
+                    io.TextIOWrapper(_st.buffer, encoding="utf-8", errors="replace"))
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os, re
 import db
 from importer import import_excel, import_word, create_template_excel
+
+
+def _apply_case(original: str, replacement: str) -> str:
+    """Ҳарфи калони аввали оригиналро ба ивазкунак мегузорад."""
+    if not original or not replacement:
+        return replacement
+    if original.isupper():
+        return replacement.upper()
+    if original[0].isupper():
+        return replacement[0].upper() + replacement[1:]
+    return replacement
 from ai_analyzer import analyze_dialect
 import offline_analyzer
 import manage_linguistic
 import tajik_keys
 import updater
 import license as lic
+from paths import app_dir
 
-API_KEY_FILE    = os.path.join(os.path.dirname(__file__), ".api_key")
-_CONTACT_FILE   = os.path.join(os.path.dirname(__file__), ".admin_contact")
+API_KEY_FILE    = os.path.join(app_dir(), ".api_key")
+_CONTACT_FILE   = os.path.join(app_dir(), ".admin_contact")
 _CONTACT_DEFAULT = {
     "name":  "Холмуродов Раҷабали",
-    "email": "jeki-102011@mail.ru",
-    "phone": "+992 93 476-15-15",
+    "email": "rajabaliit1995@mail.com",
+    "phone": "+992 985111995",
+    "photo": "",
 }
 
 def _load_contact() -> dict:
@@ -201,6 +224,51 @@ class DialectApp(tk.Tk):
                  font=("Segoe UI", 8),
                  bg=BG, fg="#7f8c8d").pack(anchor="w")
 
+        # ── Тугмаи "Дигар амалҳо" (чап) ─────────────────────────────
+        left_btn_f = tk.Frame(hdr, bg=BG)
+        left_btn_f.pack(side="left", padx=12, pady=8)
+
+        _extra_menu = tk.Menu(self, tearoff=0,
+                              bg="#1c2833", fg="#ecf0f1",
+                              activebackground="#2c3e50",
+                              activeforeground="#ecf0f1",
+                              font=("Segoe UI", 9, "bold"),
+                              relief="flat", bd=0)
+        _extra_menu.add_command(label="🤖 AI Таҳлил",
+                                command=self._ai_analyze)
+        if self._current_user and self._current_user.get("role") == "admin":
+            _extra_menu.add_separator()
+            _extra_menu.add_command(label="💾 Бекап",
+                                    command=self._backup_db)
+            _extra_menu.add_command(label="👥 Корбарон",
+                                    command=self._show_admin_panel)
+            _extra_menu.add_command(label="🔄 Навсозӣ",
+                                    command=lambda: updater.check_and_update(self))
+
+        _extra_btn = tk.Button(left_btn_f, text="⋯ Дигар амалҳо",
+                               font=("Segoe UI", 8, "bold"),
+                               bg="#2c3e50", fg="#ecf0f1",
+                               relief="raised", bd=3,
+                               cursor="hand2", padx=11, pady=5,
+                               highlightthickness=0,
+                               activebackground="#3d5166",
+                               activeforeground="#ecf0f1")
+
+        def _show_extra(e=None):
+            try:
+                bx = _extra_btn.winfo_rootx()
+                by = _extra_btn.winfo_rooty() + _extra_btn.winfo_height()
+                _extra_menu.tk_popup(bx, by)
+            finally:
+                _extra_menu.grab_release()
+
+        _extra_btn.config(command=_show_extra)
+        _extra_btn.bind("<Enter>",  lambda e: _extra_btn.config(bg="#3d5166"))
+        _extra_btn.bind("<Leave>",  lambda e: _extra_btn.config(bg="#2c3e50", relief="raised"))
+        _extra_btn.bind("<ButtonPress-1>",   lambda e: _extra_btn.config(relief="sunken"))
+        _extra_btn.bind("<ButtonRelease-1>", lambda e: _extra_btn.config(relief="raised"))
+        _extra_btn.pack(side="left")
+
         # ── Тугмаҳо (рост) ──────────────────────────────────────────
         btn_f = tk.Frame(hdr, bg=BG)
         btn_f.pack(side="right", padx=12, pady=8)
@@ -231,14 +299,9 @@ class DialectApp(tk.Tk):
         _hbtn("📥 Excel/Word",      self._import_file,             "#2980b9", "#1f618d")
         _hbtn("📋 Шаблон",          self._save_template,           "#27ae60", "#1d8348")
         _hbtn("✕  Тоза",            self._clear,                   "#c0392b", "#a93226")
-        _hbtn("🤖 AI Таҳлил",       self._ai_analyze,              "#7d3c98", "#6c3483")
         _hbtn("📊 Омор",            self._show_stats,              "#117a65", "#0e6655")
-        _hbtn("📚 Луғатхона",       self._open_linguistic_manager, "#1a5276", "#154360")
+        _hbtn("📚 Базаи луғатҳо",    self._open_linguistic_manager, "#1a5276", "#154360")
         _hbtn("🔑 Парол",          self._change_password,                  "#5d4037", "#4e342e")
-        if self._current_user and self._current_user.get("role") == "admin":
-            _hbtn("💾 Бекап",       self._backup_db,               "#424949", "#2e3131")
-            _hbtn("🔄 Навсозӣ",    lambda: updater.check_and_update(self), "#0e6655", "#0a4f40")
-            _hbtn("👥 Корбарон",    self._show_admin_panel,        "#5b2c6f", "#4a235a")
         tk.Frame(self, bg=C["header_line"], height=1).pack(fill="x")
 
     # ── Асосӣ — 3 сутун ───────────────────────────────────────────────────
@@ -258,31 +321,22 @@ class DialectApp(tk.Tk):
         outer = tk.Frame(parent, bg=C["left_border"], bd=2, relief="solid")
         outer.grid(row=0, column=0, sticky="nsew", padx=(0, 4))
 
-        tk.Label(outer, text="Матни лаҳҷавиро ворид намоед",
+        lhdr = tk.Frame(outer, bg=C["left_bg"])
+        lhdr.pack(fill="x")
+        tk.Label(lhdr, text="Матни лаҳҷавиро ворид намоед",
                  font=FT, bg=C["left_bg"], fg=C["left_title"],
                  anchor="center", pady=5).pack(fill="x")
         tk.Frame(outer, bg=C["left_border"], height=1).pack(fill="x")
 
-        # Ҳарфҳои махсус
-        kb = tk.Frame(outer, bg=C["left_bg"], pady=3)
-        kb.pack(fill="x", padx=4)
-        tk.Label(kb, text="Ҳарфҳо:", font=FXS,
-                 bg=C["left_bg"], fg=C["text3"]).pack(side="left", padx=(2, 4))
-        for lo, hk in ((sc[0], sc[2]) for sc in SPECIAL_CHARS):
-            cell = tk.Frame(kb, bg=C["left_bg"])
-            cell.pack(side="left", padx=1)
-            tk.Button(cell, text=lo, font=("Segoe UI", 10, "bold"),
-                      bg=C["kb_btn"], fg=C["left_title"],
-                      highlightbackground=C["kb_border"],
-                      relief="groove", cursor="hand2", width=2, pady=1,
-                      command=lambda c=lo: self._insert_char(c)
-                      ).pack()
-            tk.Label(cell, text=hk, font=("Segoe UI", 6),
-                     bg=C["left_bg"], fg=C["text3"]).pack()
 
         # Майдони матн
         inp_f = tk.Frame(outer, bg=C["left_bg"])
         inp_f.pack(fill="both", expand=True)
+
+        # Полоси пешниҳоди chips (поён аз равзанаи 1, монанди равзанаи 3)
+        self._typing_inp_strip, self._typing_inp_cv, self._typing_inp_inner = \
+            self._make_chip_strip(inp_f, C["left_bg"], side="bottom")
+
         self.inp = tk.Text(inp_f, font=("Segoe UI", 11), bg=C["left_bg"],
                            fg=C["text"], insertbackground=C["left_title"],
                            relief="flat", wrap="word",
@@ -290,6 +344,7 @@ class DialectApp(tk.Tk):
                            padx=8, pady=6)
         self.inp.pack(fill="both", expand=True)
         self.inp.bind("<KeyRelease>", self._on_key)
+        self.inp.bind("<ButtonRelease-1>", self._inp_click)
         self._bind_tajik_keys(self.inp)
         self._bind_edit_keys(self.inp)
 
@@ -313,6 +368,10 @@ class DialectApp(tk.Tk):
                                  font=FXS, bg=C["left_bg"],
                                  fg=C["text3"], anchor="e")
         self.char_lbl.pack(fill="x", padx=6, pady=(0, 2))
+
+        self._mic_recording = False
+        self._mic_anim_id   = None
+        self._mic_anim_step = 0
 
         # ── Вариантҳои калима (поён) ──────────────────────────────────
         tk.Frame(outer, bg=C["left_border"], height=1).pack(fill="x")
@@ -344,7 +403,7 @@ class DialectApp(tk.Tk):
         outer = tk.Frame(parent, bg=C["mid_border"], bd=2, relief="solid")
         outer.grid(row=0, column=1, sticky="nsew", padx=4)
 
-        tk.Label(outer, text="Матни лаҳҷавӣ (рангин, клик = вариантҳо)",
+        tk.Label(outer, text="Матни лаҳҷавӣ",
                  font=FT, bg=C["mid_bg"], fg=C["mid_title"],
                  anchor="center", pady=5).pack(fill="x")
         tk.Frame(outer, bg=C["mid_border"], height=1).pack(fill="x")
@@ -387,17 +446,47 @@ class DialectApp(tk.Tk):
         outer = tk.Frame(parent, bg=C["right_border"], bd=2, relief="solid")
         outer.grid(row=0, column=2, sticky="nsew", padx=(4, 0))
 
-        tk.Label(outer, text="Тарҷумаи адабӣ",
+        # ── Боло: сарлавҳа + тугмаи садо ────────────────────────────
+        hdr_row = tk.Frame(outer, bg=C["right_bg"])
+        hdr_row.pack(side="top", fill="x")
+        tk.Label(hdr_row, text="Тарҷумаи адабӣ",
                  font=FT, bg=C["right_bg"], fg=C["right_title"],
-                 anchor="center", pady=5).pack(fill="x")
-        tk.Frame(outer, bg=C["right_border"], height=1).pack(fill="x")
+                 anchor="center", pady=5).pack(side="left", expand=True)
+        self._tts_active = False
 
-        # Натиҷаи асосӣ
+        # ── Тугмаҳои садо ва микрофон ──────────────────────────────────
+        btn_frame = tk.Frame(hdr_row, bg=C["right_bg"])
+        btn_frame.pack(side="right", padx=6)
+
+        def _make_icon_btn(parent, text, cmd, base_bg, hover_bg):
+            btn = tk.Button(parent, text=text, command=cmd,
+                            bg=base_bg, fg="#ffffff",
+                            activebackground=hover_bg, activeforeground="#ffffff",
+                            relief="flat", cursor="hand2",
+                            font=("Segoe UI Emoji", 12), bd=0,
+                            padx=8, pady=3)
+            btn.bind("<Enter>", lambda e: btn.config(bg=hover_bg))
+            btn.bind("<Leave>", lambda e: btn.config(bg=base_bg))
+            return btn
+
+        self._mic_btn = _make_icon_btn(btn_frame, "🎤",
+                                       self._start_voice_input,
+                                       "#3498db", "#2475a8")
+        self._mic_btn.pack(side="left", padx=(0, 4))
+
+        self._tts_btn = _make_icon_btn(btn_frame, "🔊",
+                                       self._speak_right,
+                                       "#5dade2", "#2e86c1")
+        self._tts_btn.pack(side="left")
+        tk.Frame(outer, bg=C["right_border"], height=1).pack(side="top", fill="x")
+
         win_f = tk.Frame(outer, bg=C["winner_bg"], pady=5, padx=8)
-        win_f.pack(fill="x", padx=4, pady=(4, 2))
-        tk.Label(win_f, text="ЛАҲҶАИ МУАЙЯНШУДА",
+        win_f.pack(side="top", fill="x", padx=4, pady=(4, 2))
+        tk.Label(win_f,
+                 text="КАЛИМАҲОИ ЭҲТИМОЛӢ · БАРХУРД ВА МАНСУБИЯТИ КАЛИМАҲО БА НОҲИЯҲО",
                  font=("Segoe UI", 7, "bold"),
-                 bg=C["winner_bg"], fg=C["text3"]).pack()
+                 bg=C["winner_bg"], fg=C["text3"],
+                 wraplength=220, justify="center").pack()
         self.winner_name = tk.Label(win_f, text="—",
                                     font=("Segoe UI", 13, "bold"),
                                     bg=C["winner_bg"], fg=C["winner_fg"],
@@ -412,12 +501,66 @@ class DialectApp(tk.Tk):
                                  font=("Segoe UI", 9, "bold"),
                                  bg=C["winner_bg"], fg="#aa4400")
         self.conf_lbl.pack(pady=(4, 0))
+        tk.Frame(outer, bg=C["right_border"], height=1).pack(
+            side="top", fill="x", padx=4, pady=3)
 
-        tk.Frame(outer, bg=C["right_border"], height=1).pack(fill="x", padx=4, pady=3)
+        # ── Омори тарҷума ────────────────────────────────────────────────
+        ST_BG = "#eafaf1"
+        stats_f = tk.Frame(outer, bg=ST_BG)
+        stats_f.pack(side="top", fill="x", padx=4, pady=(0, 3))
+        self._stats_lbl = tk.Label(
+            stats_f, text="",
+            font=("Segoe UI", 8), bg=ST_BG, fg="#1e8449",
+            justify="left", anchor="w", padx=8, pady=2)
+        self._stats_lbl.pack(fill="x")
+        self._unknown_lbl = tk.Label(
+            stats_f, text="",
+            font=("Segoe UI", 8), bg=ST_BG, fg="#c0392b",
+            justify="left", anchor="w", padx=8,
+            wraplength=220)
+        self._unknown_lbl.pack(fill="x", pady=(0, 4))
+        tk.Frame(outer, bg=C["right_border"], height=1).pack(
+            side="top", fill="x", padx=4, pady=(0, 3))
 
-        # Матни адабӣ
+        # ── Поён: AI пешниҳод (аввал поёнро ҷойгир мекунем) ────────────
+        AI_BG = "#eef2ff"
+        AI_BD = "#3b5bdb"
+
+        ai_outer = tk.Frame(outer, bg=AI_BG)
+        ai_outer.pack(side="bottom", fill="x")
+        tk.Frame(ai_outer, bg=AI_BD, height=1).pack(side="top", fill="x")
+        ai_hdr = tk.Frame(ai_outer, bg=AI_BG)
+        ai_hdr.pack(side="top", fill="x")
+        tk.Label(ai_hdr, text="🤖 Пешниҳодҳои зеҳни сунъӣ",
+                 font=("Segoe UI", 8, "bold"), bg=AI_BG, fg="#1a3a8f",
+                 anchor="w", padx=6, pady=3).pack(side="left")
+        self._ai_spin_lbl = tk.Label(ai_hdr, text="",
+                                     font=("Segoe UI", 8),
+                                     bg=AI_BG, fg=C["text3"])
+        self._ai_spin_lbl.pack(side="right", padx=6)
+        ai_wrap = tk.Frame(ai_outer, bg=AI_BG)
+        ai_wrap.pack(side="top", fill="both")
+        self._ai_sugg_text = tk.Text(
+            ai_wrap, font=("Segoe UI", 10),
+            bg=AI_BG, fg=C["text"],
+            relief="flat", wrap="word", state="disabled",
+            padx=8, pady=4, height=5, cursor="arrow")
+        ai_sb = ttk.Scrollbar(ai_wrap, orient="vertical",
+                               command=self._ai_sugg_text.yview)
+        self._ai_sugg_text.configure(yscrollcommand=ai_sb.set)
+        ai_sb.pack(side="right", fill="y")
+        self._ai_sugg_text.pack(side="left", fill="both", expand=True)
+
+        # _rvar_frame — пинҳон, танҳо барои мутобиқати боқии код нигоҳ дошта шудааст
+        self._rvar_frame = tk.Frame(self)
+
+        # ── Миёна: матни тарҷума (фазои боқимондаро мегирад) ────────────
         right_wrap = tk.Frame(outer, bg=C["right_bg"])
-        right_wrap.pack(fill="both", expand=True)
+        right_wrap.pack(side="top", fill="both", expand=True)
+
+        # Полоси пешниҳоди калимаҳои ҳарфдор (поён аз матни тарҷума)
+        self._typing_right_strip, self._typing_right_cv, self._typing_right_inner = \
+            self._make_chip_strip(right_wrap, C["right_bg"], side="bottom")
 
         self.right_text = tk.Text(right_wrap, font=("Segoe UI", 12),
                                   bg=C["right_bg"], fg=C["text"],
@@ -430,30 +573,13 @@ class DialectApp(tk.Tk):
         self.right_text.configure(yscrollcommand=sb2.set)
         sb2.pack(side="right", fill="y")
         self.right_text.pack(fill="both", expand=True)
+        self.right_text.bind("<ButtonRelease-1>", self._right_click)
+        self.right_text.bind("<Button-3>",        self._right_click_poly)
         self.right_text.tag_configure("nomatch", foreground=C["neutral"],
                                       font=("Segoe UI", 12))
-
-        # ── Вариантҳо (поёни рост) ────────────────────────────────────
-        tk.Frame(outer, bg=C["right_border"], height=1).pack(fill="x")
-        tk.Label(outer, text="Вариантҳои лаҳҷавӣ:",
-                 font=FXS, bg=C["right_bg"], fg=C["text3"],
-                 anchor="w", padx=6, pady=2).pack(fill="x")
-
-        self._rvar_scroll_f = tk.Frame(outer, bg=C["right_bg"])
-        self._rvar_scroll_f.pack(fill="x", padx=4, pady=(0, 4))
-
-        self._rvar_canvas = tk.Canvas(self._rvar_scroll_f, bg=C["right_bg"],
-                                      highlightthickness=0, height=80)
-        _rvsb = ttk.Scrollbar(self._rvar_scroll_f, orient="horizontal",
-                               command=self._rvar_canvas.xview)
-        self._rvar_canvas.configure(xscrollcommand=_rvsb.set)
-        _rvsb.pack(side="bottom", fill="x")
-        self._rvar_canvas.pack(fill="x")
-        self._rvar_frame = tk.Frame(self._rvar_canvas, bg=C["right_bg"])
-        self._rvar_canvas.create_window((0, 0), window=self._rvar_frame, anchor="nw")
-        self._rvar_frame.bind("<Configure>",
-            lambda e: self._rvar_canvas.configure(
-                scrollregion=self._rvar_canvas.bbox("all")))
+        self.right_text.tag_configure("poly_mark",
+            underline=True, foreground="#c0392b",
+            font=("Segoe UI", 12, "bold"))
 
     # ── Поёни зард ────────────────────────────────────────────────────────
     def _build_bottom(self):
@@ -596,8 +722,60 @@ class DialectApp(tk.Tk):
         self.char_lbl.config(text=f"{len(text)} ҳарф")
         if not text:
             self._reset()
+            self._clear_typing_ac()
         else:
             self._analyze(text)
+            self._update_typing_ac()
+
+    def _update_typing_ac(self):
+        """Калимаи нопурраро аз курсор гирифта, дар панели 'Вариантҳо' (зери равзанаи 1) нишон медиҳад."""
+        import re as _re
+        try:
+            cursor = self.inp.index(tk.INSERT)
+            line_no, col = cursor.split(".")
+            line = self.inp.get(f"{line_no}.0", f"{line_no}.{col}")
+            i = len(line)
+            while i > 0 and line[i - 1].isalpha():
+                i -= 1
+            last_word = line[i:]
+            ws = f"{line_no}.{i}"
+            we = f"{line_no}.{col}"
+        except Exception:
+            last_word, ws, we = "", "1.0", "1.0"
+
+        if len(last_word) < 2:
+            self._clear_typing_ac()
+            return
+
+        rows = db.search_autocomplete_all(last_word, limit=14)
+        if not rows:
+            self._clear_typing_ac()
+            return
+
+        # Мавқеи калимаи нопурраро барои _ac1_click нигоҳ мекунем
+        self._ac_source_w1 = (ws, we)
+
+        expanded: list[dict] = []
+        seen: set[str] = set()
+        for r in rows:
+            for form in (r.get("dialect_form", "").strip(), r.get("literary", "").strip()):
+                if form and form not in seen and not _re.search(r"[a-zA-Z]", form):
+                    seen.add(form)
+                    expanded.append({**r, "_label": form})
+
+        self._show_ac_strip(
+            self._typing_inp_strip, self._typing_inp_cv, self._typing_inp_inner,
+            expanded, lambda r: self._ac1_click(r))
+
+    def _clear_typing_ac(self):
+        """Полосҳои chips-и равзанаи 1 ва 3-ро тоза мекунад."""
+        if hasattr(self, "_typing_inp_strip"):
+            self._show_ac_strip(
+                self._typing_inp_strip, self._typing_inp_cv, self._typing_inp_inner, [], None)
+        if hasattr(self, "_typing_right_strip"):
+            self._show_ac_strip(
+                self._typing_right_strip, self._typing_right_cv,
+                self._typing_right_inner, [], None)
 
     def _analyze(self, text):
         # ── Рангҳои якхела ─────────────────────────────────────────────
@@ -608,27 +786,66 @@ class DialectApp(tk.Tk):
         CG  = "#1e8449"   # сабз    — ислоҳшуда (дар тарҷума)
         CRU = "#e74c3c"   # сурхи   — дар база нест (дар тарҷума)
 
+        # ── Ибораҳоро аввал ёб (phrase-first) ────────────────────────────
+        # phrase_wr_map: form_lower → (dks, "dialect_phrase", lit_orig)
+        phrase_wr_map: dict[str, tuple] = {}
+        phrase_scores: dict[str, int]   = {}
+        for form, lit_orig, dks in db.detect_phrases(text.lower()):
+            phrase_wr_map[form] = (dks, "dialect_phrase", lit_orig)
+            for dk in dks:
+                phrase_scores[dk] = phrase_scores.get(dk, 0) + 1
+
         # ── Токенҳо барои SQL ──────────────────────────────────────────
         # Пайвандак-калимаҳоро ба қисматҳо ҷудо мекунем барои луғат
         compound_tokens = re.findall(r"[\wЀ-ӿ]+(?:-[\wЀ-ӿ]+)+", text, re.UNICODE)
         simple_tokens   = re.findall(r"[\wЀ-ӿ]+", text, re.UNICODE)
 
+        # Луғати тарҷума — АВВАЛ санҷем (бартарияти олӣ, ҳама токен)
+        tr_map = db.tr_translate_batch(simple_tokens)
+
         scores, word_results = db.detect_dialect(simple_tokens)
+        # Ибора баллҳоро ба умумиге илова мекунем
+        for dk, sc in phrase_scores.items():
+            scores[dk] = scores.get(dk, 0) + sc
 
         # Морфологии иловагӣ барои нешинохташудаҳо
         unknown_toks = [tok for tok, m, wt in word_results if not m]
         morph_map    = db.morph_classify(unknown_toks)
 
+        # Луғати тарҷума — ҳамаи токенҳоро иваз мекунем (на танҳо unknown)
+        for tok in simple_tokens:
+            tl = tok.lower()
+            if tl in tr_map:
+                morph_map[tl] = (["translator"], tr_map[tl], "translator")
+
+        # Калимаҳоеро ки дар ибораҳо ёфта мешаванд низ ислоҳ мекунем
+        for tok, m, wt in word_results:
+            if m or wt != "unknown":
+                continue
+            if tok.lower() in morph_map:
+                continue
+            lit_w, dks = db.find_word_in_phrases(tok)
+            if dks and lit_w.lower() != tok.lower():
+                morph_map[tok.lower()] = (dks, lit_w, "dialect_phrase_word")
+                for dk in dks:
+                    scores[dk] = scores.get(dk, 0) + 1
+
         # wr_map: tl → (matched, wtype, lit_override)
         wr_map: dict[str, tuple] = {}
         for tok, m, wtype in word_results:
             wr_map.setdefault(tok.lower(), (m, wtype, None))
-
+        # Ибораҳо
+        wr_map.update(phrase_wr_map)
+        # Морфология ва ибора-калима
         for tl, (dks, lit_f, mtype) in morph_map.items():
-            wr_map[tl] = (dks, mtype, lit_f)
-            if "dialect" in mtype:
-                for dk in dks:
-                    scores[dk] = scores.get(dk, 0) + 1
+            if tl not in tr_map:          # translator-ро дасткорӣ накунем
+                wr_map[tl] = (dks, mtype, lit_f)
+                if "dialect" in mtype:
+                    for dk in dks:
+                        scores[dk] = scores.get(dk, 0) + 1
+        # Луғати тарҷума — ОХИРда, олитарин бартарӣ (ҳеч чиз иваз карда наметавонад)
+        for tl, lit in tr_map.items():
+            wr_map[tl] = (["translator"], "translator", lit)
 
         # Пайвандак-калимаҳо: аз қисматҳо ҷамъ мекунем
         for comp in compound_tokens:
@@ -666,81 +883,8 @@ class DialectApp(tk.Tk):
         best_sc = scores.get(best, 0)
         tokens  = _tokenize(text)
 
-        # ── Миёна: матни рангин ─────────────────────────────────────────
-        self.mid_text.configure(state="normal")
-        self.mid_text.delete("1.0", "end")
-        matched_n = 0
-
-        def _mid_color(wtype, matched):
-            if wtype in ("literary", "literary_stem"):
-                return CL, ("Segoe UI", 12, "italic"), False   # сиёҳ — адабӣ
-            return CR, ("Segoe UI", 12, "bold"), True           # сурх — лаҳҷавӣ
-
-        for tok, is_word in tokens:
-            if not is_word:
-                self.mid_text.insert("end", tok)
-                continue
-            matched, wtype, lit_ov = wr_map.get(tok.lower(), ([], "unknown", None))
-            if wtype == "elision_corrected":
-                # Реша = сиёҳ (адабӣ), пасванди кашидашавӣ = сурх (лаҳҷавӣ)
-                matched_n += 1
-                _corr = {"м": "ам", "т": "ат", "ш": "аш", "д": "ад"}
-                _last = tok[-1].lower() if tok else ""
-                if _last in _corr:
-                    tag_r = self._next_tag()
-                    self.mid_text.tag_configure(tag_r, foreground=CL,
-                        font=("Segoe UI", 12, "italic"))
-                    self.mid_text.insert("end", tok[:-1], (tag_r,))
-                    tag_s = self._next_tag()
-                    self.mid_text.tag_configure(tag_s, foreground=CR,
-                        font=("Segoe UI", 12, "bold"), underline=True)
-                    self.mid_text.insert("end", tok[-1], (tag_s,))
-                else:
-                    tag = self._next_tag()
-                    self.mid_text.tag_configure(tag, foreground=CR,
-                        font=("Segoe UI", 12, "bold"), underline=True)
-                    self.mid_text.insert("end", tok, (tag,))
-            elif matched:
-                matched_n += 1
-                color, font, uline = _mid_color(wtype, matched)
-                # Барои лаҳҷавӣ: пасванди адабии стандартиро ҷудо кун
-                _STD = ["ашон", "амон", "атон", "анд", "ям", "ем", "ед",
-                        "ам", "ат", "аш", "ро", "ҳо", "он"]
-                tl = tok.lower()
-                suf = (next((_s for _s in _STD
-                             if tl.endswith(_s) and len(tl) > len(_s) + 1), "")
-                       if wtype not in ("literary", "literary_stem") else "")
-                if suf:
-                    # Реша = сурх+ғафс, пасванди стандартӣ = сиёҳ+курсив
-                    tag1 = self._next_tag()
-                    self.mid_text.tag_configure(tag1, foreground=color,
-                        font=font, underline=uline)
-                    self.mid_text.insert("end", tok[:-len(suf)], (tag1,))
-                    self.mid_text.tag_bind(tag1, "<Button-1>",
-                        lambda e, w=tok, dm=matched: self._show_word_variants(w, dm))
-                    self.mid_text.tag_bind(tag1, "<Enter>",
-                        lambda e: self.mid_text.configure(cursor="hand2"))
-                    self.mid_text.tag_bind(tag1, "<Leave>",
-                        lambda e: self.mid_text.configure(cursor="arrow"))
-                    tag2 = self._next_tag()
-                    self.mid_text.tag_configure(tag2, foreground=CL,
-                        font=("Segoe UI", 12, "italic"))
-                    self.mid_text.insert("end", tok[-len(suf):], (tag2,))
-                else:
-                    tag = self._next_tag()
-                    self.mid_text.tag_configure(tag, foreground=color,
-                        font=font, underline=uline)
-                    self.mid_text.insert("end", tok, (tag,))
-                    self.mid_text.tag_bind(tag, "<Button-1>",
-                        lambda e, w=tok, dm=matched: self._show_word_variants(w, dm))
-                    self.mid_text.tag_bind(tag, "<Enter>",
-                        lambda e: self.mid_text.configure(cursor="hand2"))
-                    self.mid_text.tag_bind(tag, "<Leave>",
-                        lambda e: self.mid_text.configure(cursor="arrow"))
-            else:
-                self.mid_text.insert("end", tok, "nomatch")
-
-        self.mid_text.configure(state="disabled")
+        # ── Миёна: таҳлили морфологӣ (реша / пешванд / пасванд) ────────────
+        self._show_morph_mid(text, wr_map)
 
         # ── Ҳисоби адабӣ / лаҳҷавӣ / ношинохта ────────────────────────
         total_w  = max(len(simple_tokens), 1)
@@ -812,6 +956,10 @@ class DialectApp(tk.Tk):
         self.right_text.configure(state="normal")
         self.right_text.delete("1.0", "end")
 
+        replaced_cnt  = 0
+        unchanged_cnt = 0
+        unknown_words: list[str] = []   # калимаҳое ки дар база нестанд
+
         for tok, is_word in tokens:
             if not is_word:
                 self.right_text.insert("end", tok)
@@ -821,27 +969,68 @@ class DialectApp(tk.Tk):
             if not matched:
                 if lit_override and lit_override.lower() != tok.lower():
                     # Кашидашавии садонок ислоҳ шуд (бародарм → бародарам)
+                    replaced_cnt += 1
                     self.right_text.tag_configure(tag, foreground=CG,
                         font=("Segoe UI", 12, "bold"))
-                    self.right_text.insert("end", lit_override, (tag,))
+                    self.right_text.insert("end", _apply_case(tok, lit_override), (tag,))
                 else:
                     # Дар база нест — адабии стандартӣ ҳисоб мешавад
+                    unchanged_cnt += 1
+                    tl = tok.lower()
+                    if wtype == "unknown" and tl not in {w.lower() for w in unknown_words}:
+                        unknown_words.append(tok)
                     self.right_text.tag_configure(tag, foreground=CL,
                         font=("Segoe UI", 12))
                     self.right_text.insert("end", tok, (tag,))
             elif wtype in ("literary", "literary_stem"):
                 # Адабӣ — сиёҳ, бидуни тағйир
+                unchanged_cnt += 1
                 self.right_text.tag_configure(tag, foreground=CL,
                     font=("Segoe UI", 12))
                 self.right_text.insert("end", tok, (tag,))
             else:
                 # Лаҳҷавӣ → ислоҳ → сабз
                 lit = lit_override or self._find_literary(tok, matched)
+                if lit.lower() != tok.lower():
+                    replaced_cnt += 1
+                else:
+                    unchanged_cnt += 1
                 self.right_text.tag_configure(tag, foreground=CG,
                     font=("Segoe UI", 12, "bold"))
-                self.right_text.insert("end", lit, (tag,))
+                self.right_text.insert("end", _apply_case(tok, lit), (tag,))
+
+        # ── "ба/Ба + феъл" → "баъд/Баъд" дар right_text ─────────────────
+        self._apply_ba_correction()
 
         self.right_text.configure(state="disabled")
+
+        # ── Калимаҳои сермаъно зерхат мекунем ──────────────────────────
+        self._mark_polysemy_words()
+
+        # ── AI пешниҳодҳо: калимаҳои адабии ивазшуда ──────────────────
+        _LIT_SKIP = {"literary", "literary_stem"}
+        lit_replacements: list[str] = []
+        for tok, is_word in tokens:
+            if not is_word:
+                continue
+            matched, wtype, lit_override = wr_map.get(tok.lower(), ([], "unknown", None))
+            if matched and wtype not in _LIT_SKIP:
+                # Лаҳҷавии иваз шуда → шакли адабии он
+                lit = lit_override or self._find_literary(tok, matched)
+                if lit and lit.lower() != tok.lower():
+                    lit_replacements.append(lit)
+            elif lit_override and lit_override.lower() != tok.lower():
+                # Кашидашавии садонок ислоҳшуда
+                lit_replacements.append(lit_override)
+        # Дубликатҳоро нест мекунем, тартибро нигоҳ медорем
+        seen_lit: set[str] = set()
+        unique_lit = []
+        for w in lit_replacements:
+            wl = w.lower()
+            if wl not in seen_lit:
+                seen_lit.add(wl)
+                unique_lit.append(w)
+        self._run_ai_suggest(unique_lit)
 
         # ── Легенда рангҳо ──────────────────────────────────────────────
         for w in self._leg_frame.winfo_children():
@@ -867,6 +1056,7 @@ class DialectApp(tk.Tk):
             self.winner_name.config(text="Лаҳҷа ёфт нашуд", fg=C["text3"])
             self.winner_region.config(text="")
             self.conf_lbl.config(text="Луғатро пур кунед")
+            _winner_line = "Ноҳия муайян нашуд"
         else:
             wd    = self.data["dialects"].get(best, {})
             conf  = int(best_sc / total * 100)
@@ -874,6 +1064,28 @@ class DialectApp(tk.Tk):
             self.winner_name.config(text=wd.get("name", best), fg=color)
             self.winner_region.config(text=wd.get("region", ""))
             self.conf_lbl.config(text=f"Эҳтимол: {conf}%  ·  {best_sc} калима")
+            _winner_line = (f"Ноҳия: {wd.get('name', best)}"
+                            + (f"  ({wd.get('region','')})" if wd.get("region") else "")
+                            + f"  ·  Эҳтимол {conf}%")
+
+        # ── Омори тарҷума ─────────────────────────────────────────────
+        if hasattr(self, "_stats_lbl"):
+            _total_w2 = replaced_cnt + unchanged_cnt
+            _repl_pct = int(replaced_cnt / _total_w2 * 100) if _total_w2 else 0
+            _unch_pct = 100 - _repl_pct
+            self._stats_lbl.config(text=(
+                f"✔ Иваз шуд: {replaced_cnt} кал. ({_repl_pct}%)  "
+                f"◌ Боқӣ монд: {unchanged_cnt} кал. ({_unch_pct}%)\n"
+                f"Адабӣ: {lit_pct}%   Лаҳҷавӣ: {dial_pct}%   ·   {_winner_line}"
+            ))
+        if hasattr(self, "_unknown_lbl"):
+            if unknown_words:
+                _unk_show = ", ".join(unknown_words[:8])
+                _unk_more = f"  +{len(unknown_words)-8} дигар" if len(unknown_words) > 8 else ""
+                self._unknown_lbl.config(
+                    text=f"⚠ Дар база нест: {_unk_show}{_unk_more}")
+            else:
+                self._unknown_lbl.config(text="")
 
         # ── Поён: таҳлили муфассал ─────────────────────────────────────
         self.analysis_text.configure(state="normal")
@@ -973,8 +1185,9 @@ class DialectApp(tk.Tk):
 
             lit      = lit_override or self._find_literary(tl, matched)
             pos      = self._get_pos(lit)
-            names    = ", ".join(self.data["dialects"][m]["name"]
-                                 for m in matched if m in self.data["dialects"])
+            names    = ", ".join(
+                self.data["dialects"].get(m, {}).get("name", m)
+                for m in matched)
             lit_part = f" → «{lit}»" if lit.lower() != tl.lower() else ""
             pos_part = f" [{pos}]"   if pos and pos != "—"         else ""
             morph_s  = " ~морф"     if "stem" in wtype             else ""
@@ -1022,6 +1235,730 @@ class DialectApp(tk.Tk):
 
         self.analysis_text.configure(state="disabled")
 
+    # ══════════════════════════════════════════════════════════════════════
+    # ИСЛОҲИ "ба/Ба + феъл" → "баъд/Баъд" дар равзанаи 3
+    # ══════════════════════════════════════════════════════════════════════
+    def _run_ai_suggest(self, lit_words: list[str]):
+        """Калимаҳои адабии ивазшударо мегирад ва аз ҳамаи базаҳо монандҳоро меёбад."""
+        from ai_analyzer import suggest_similar
+
+        if not lit_words:
+            self._update_ai_sugg("")
+            return
+
+        self._ai_spin_lbl.config(text="⏳ ҷустуҷу...")
+        self._ai_sugg_text.configure(state="normal")
+        self._ai_sugg_text.delete("1.0", "end")
+        self._ai_sugg_text.insert("end", "Ҷустуҷу идома дорад...")
+        self._ai_sugg_text.configure(state="disabled")
+
+        db_rows = db.get_all_for_suggest()
+
+        def _ok(txt):
+            self.after(0, lambda: self._update_ai_sugg(txt))
+        def _err(msg):
+            self.after(0, lambda: self._update_ai_sugg(f"⚠ {msg}"))
+
+        suggest_similar(lit_words, db_rows, self._api_key, _ok, _err)
+
+    def _update_ai_sugg(self, text: str):
+        """Натиҷаи AI-пешниҳодро дар панел нишон медиҳад."""
+        self._ai_spin_lbl.config(text="")
+        self._ai_sugg_text.configure(state="normal")
+        self._ai_sugg_text.delete("1.0", "end")
+        self._ai_sugg_text.insert("end", text)
+        self._ai_sugg_text.configure(state="disabled")
+
+    # ── Text-to-Speech ─────────────────────────────────────────────────────
+    def _speak_right(self):
+        """Ҳар клик: агар кор мекунад — мебозмедорад ва аз нав шурӯъ мекунад."""
+        import threading
+
+        # Ҳамеша аввал мебозмедорем — ҳеҷ гоҳ рӯи ҳам нест
+        self._tts_stop()
+
+        text = self.right_text.get("1.0", "end").strip()
+        if not text:
+            return
+
+        # Сессияи нав — thread-и кӯҳна UI-ро дигар навсозӣ намекунад
+        self._tts_session = getattr(self, "_tts_session", 0) + 1
+        sid = self._tts_session
+
+        self._tts_active = True
+        self._tts_btn.config(text="⏹", bg="#c0392b", activebackground="#a93226")
+
+        def _run():
+            try:
+                import subprocess, re
+                safe = re.sub(r'["\'\n\r]', ' ', text)[:1000]
+                proc = subprocess.Popen(
+                    ["powershell", "-WindowStyle", "Hidden", "-Command",
+                     "Add-Type -AssemblyName System.Speech; "
+                     "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                     f'$s.Speak("{safe}")'],
+                    creationflags=subprocess.CREATE_NO_WINDOW)
+                self._tts_proc = proc
+                proc.wait()
+            except Exception:
+                try:
+                    import pyttsx3
+                    eng = pyttsx3.init()
+                    self._tts_engine = eng
+                    eng.setProperty("rate", 145)
+                    eng.say(text)
+                    eng.runAndWait()
+                except Exception:
+                    pass
+            # Танҳо агар ин session ҳанӯз фаъол бошад UI-ро навсозӣ мекунем
+            if getattr(self, "_tts_session", 0) == sid:
+                self.after(0, self._tts_done)
+
+        self._tts_thread = threading.Thread(target=_run, daemon=True)
+        self._tts_thread.start()
+
+    def _tts_stop(self):
+        """Ҷараёни TTS-ро дарҳол мебозмедорад."""
+        proc = getattr(self, "_tts_proc", None)
+        if proc:
+            try: proc.terminate()
+            except Exception: pass
+            self._tts_proc = None
+        eng = getattr(self, "_tts_engine", None)
+        if eng:
+            try: eng.stop()
+            except Exception: pass
+            self._tts_engine = None
+        self._tts_active = False
+
+    def _tts_done(self):
+        """Пас аз хатми хондан тугмаро барқарор мекунад."""
+        self._tts_active = False
+        if hasattr(self, "_tts_btn"):
+            self._tts_btn.config(text="🔊", bg="#5dade2", activebackground="#2e86c1")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # ПЕШНИҲОДИ КАЛИМА — клики мушак боло/ба калима
+    # ══════════════════════════════════════════════════════════════════════
+    def _make_chip_strip(self, parent, bg, side="top"):
+        """Полоси уфуқии чипҳои пешниҳодиро месозад.
+        Ҳамеша пакед аст (баландии 0 ҳангоми холӣ), то мавқеъаш нигоҳ дошта шавад."""
+        outer = tk.Frame(parent, bg=bg)
+        outer.pack(side=side, fill="x")
+        cv = tk.Canvas(outer, height=0, bg=bg, highlightthickness=0)
+        sb = ttk.Scrollbar(outer, orient="horizontal", command=cv.xview)
+        cv.configure(xscrollcommand=sb.set)
+        inner = tk.Frame(cv, bg=bg)
+        cv.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>",
+                   lambda e: cv.configure(scrollregion=cv.bbox("all")))
+        sb.pack(side="bottom", fill="x")
+        cv.pack(fill="x", expand=True)
+        return outer, cv, inner
+
+    def _show_ac_strip(self, strip, cv, inner, rows, on_click):
+        """Чипҳоро нишон медиҳад (бе ҳарфи лотинӣ) ё полосро холӣ мегузорад."""
+        import re as _re
+        for w in inner.winfo_children():
+            w.destroy()
+        valid = []
+        for row in (rows or []):
+            label = row.get("_label") or row.get("literary", "") or row.get("dialect_form", "")
+            if not label or _re.search(r"[a-zA-Z]", label):
+                continue   # ҳарфи лотинӣ — нишон надеҳ
+            valid.append((label, row))
+        if not valid:
+            cv.configure(height=0)
+            return
+        for label, row in valid:
+            btn = tk.Button(
+                inner, text=label,
+                font=("Segoe UI", 9), relief="flat",
+                bg="#dce8f7", fg="#1a3a5c",
+                activebackground="#aac8ef",
+                padx=7, pady=3, cursor="hand2",
+                command=lambda r=row: on_click(r))
+            btn.pack(side="left", padx=2, pady=2)
+        cv.configure(height=36)
+        cv.update_idletasks()
+        cv.configure(scrollregion=cv.bbox("all"))
+
+    @staticmethod
+    def _word_at_coord(widget: tk.Text, x: int, y: int) -> tuple[str, str, str]:
+        """(ws, we, word) аз координатаи пикселӣ. Дар widget-и disabled ҳам кор мекунад."""
+        idx = widget.index(f"@{x},{y}")
+        line_no, col = map(int, idx.split("."))
+        line = widget.get(f"{line_no}.0", f"{line_no}.end")
+        col = min(col, len(line))
+        start = col
+        while start > 0 and line[start - 1].isalpha():
+            start -= 1
+        end = col
+        while end < len(line) and line[end].isalpha():
+            end += 1
+        return f"{line_no}.{start}", f"{line_no}.{end}", line[start:end]
+
+    def _inp_click(self, event):
+        """Клики мушак дар равзанаи 1 — монандҳо дар панели Вариантҳо."""
+        try:
+            ws, we, word = self._word_at_coord(self.inp, event.x, event.y)
+        except (tk.TclError, ValueError, IndexError):
+            return
+        if len(word) < 2:
+            return
+        self._ac_source_w1 = (ws, we)
+        raw = db.search_autocomplete_all(word, limit=16)
+        expanded: list[dict] = []
+        seen: set[str] = set()
+        for row in raw:
+            for form in (row.get("dialect_form", "").strip(),
+                         row.get("literary", "").strip()):
+                if form and form not in seen:
+                    seen.add(form)
+                    expanded.append({**row, "_label": form})
+        self._show_ac_in_var(expanded, word)
+
+    def _right_click(self, event):
+        """Клики мушак дар равзанаи 3 — монандҳо ҳамчун chips зери равзанаи 3."""
+        import re as _re
+        try:
+            ws, we, word = self._word_at_coord(self.right_text, event.x, event.y)
+        except (tk.TclError, ValueError, IndexError):
+            return
+        if len(word) < 2:
+            if hasattr(self, "_typing_right_strip"):
+                self._show_ac_strip(
+                    self._typing_right_strip, self._typing_right_cv,
+                    self._typing_right_inner, [], None)
+            return
+        self._ac_source_w3 = (ws, we)
+        rows = db.search_autocomplete_all(word, limit=14)
+        filtered: list[dict] = []
+        seen: set[str] = set()
+        for r in rows:
+            for form in (r.get("literary", "").strip(), r.get("dialect_form", "").strip()):
+                if form and form not in seen and not _re.search(r"[a-zA-Z]", form):
+                    seen.add(form)
+                    filtered.append({**r, "_label": form})
+        self._show_ac_strip(
+            self._typing_right_strip, self._typing_right_cv, self._typing_right_inner,
+            filtered, lambda r: self._ac3_click(r))
+
+    def _show_ac_in_var(self, rows, word):
+        """Монандҳои равзанаи 1-ро дар панели 'Вариантҳо' нишон медиҳад."""
+        import re as _re
+        for w in self._var_frame.winfo_children():
+            w.destroy()
+        filtered = [r for r in rows
+                    if not _re.search(r'[a-zA-Z]', r.get("_label") or "")]
+        if not filtered:
+            self._var_title_l.config(
+                text=f"«{word}» — монанд калима ёфт нашуд")
+            return
+        self._var_title_l.config(
+            text=f"«{word}» — монанд калимаҳо (пахш кунед):")
+        for row in filtered:
+            lbl = row.get("_label", "")
+            if not lbl:
+                continue
+            btn = tk.Button(
+                self._var_frame, text=lbl,
+                font=("Segoe UI", 10), bg="#e8f8f5", fg="#1a6b3a",
+                relief="solid", bd=1, padx=8, pady=3,
+                cursor="hand2",
+                command=lambda r=row: self._ac1_click(r))
+            btn.pack(side="left", padx=3, pady=2)
+        self._var_canvas.update_idletasks()
+        self._var_canvas.configure(
+            scrollregion=self._var_canvas.bbox("all"))
+
+    def _show_ac_in_ai(self, rows, word):
+        """Монандҳои равзанаи 3-ро дар панели 'Пешниҳодҳои зеҳни сунъӣ' нишон медиҳад."""
+        import re as _re
+        self._ai_sugg_text.configure(state="normal")
+        self._ai_sugg_text.delete("1.0", "end")
+        self._ai_spin_lbl.config(text="")
+        filtered = [r for r in rows
+                    if not _re.search(r'[a-zA-Z]',
+                                      r.get("literary") or r.get("dialect_form") or "")]
+        if not filtered:
+            self._ai_sugg_text.insert(
+                "end", f"«{word}» — монанд калима ёфт нашуд")
+            self._ai_sugg_text.configure(state="disabled")
+            return
+        self._ai_sugg_text.insert(
+            "end", f"«{word}» — монанд калимаҳо:\n",
+            ("hdr_tag",))
+        self._ai_sugg_text.tag_configure(
+            "hdr_tag", font=("Segoe UI", 9, "bold"),
+            foreground="#1a3a8f", spacing3=4)
+        for i, row in enumerate(filtered):
+            lbl = row.get("literary") or row.get("dialect_form", "")
+            if not lbl:
+                continue
+            tag = f"_w3_{i}"
+            self._ai_sugg_text.insert("end", f"  {lbl}", (tag,))
+            self._ai_sugg_text.tag_configure(
+                tag, foreground="#1a5fa8",
+                font=("Segoe UI", 10, "underline"),
+                spacing1=2)
+            self._ai_sugg_text.tag_bind(
+                tag, "<Button-1>",
+                lambda e, r=row: self._ac3_click(r))
+            self._ai_sugg_text.tag_bind(
+                tag, "<Enter>",
+                lambda e, t=tag: self._ai_sugg_text.tag_configure(
+                    t, background="#ddeeff"))
+            self._ai_sugg_text.tag_bind(
+                tag, "<Leave>",
+                lambda e, t=tag: self._ai_sugg_text.tag_configure(
+                    t, background=""))
+            self._ai_sugg_text.insert("end", "  ")
+        self._ai_sugg_text.configure(state="disabled")
+
+    def _ac1_click(self, row: dict):
+        """Калимаи интихобшударо дар равзанаи 1 иваз мекунад."""
+        replacement = row.get("_label") or row.get("dialect_form") or row.get("literary", "")
+        if not replacement or not hasattr(self, "_ac_source_w1") or self._ac_source_w1 is None:
+            return
+        ws, we = self._ac_source_w1
+        try:
+            original = self.inp.get(ws, we)
+            self.inp.delete(ws, we)
+            self.inp.insert(ws, _apply_case(original, replacement))
+            self.inp.mark_set(tk.INSERT, f"{ws}+{len(replacement)}c")
+        except tk.TclError:
+            pass
+        self._ac_source_w1 = None
+        for w in self._var_frame.winfo_children():
+            w.destroy()
+        self._var_title_l.config(text="Вариантҳо — калимаро пахш кунед:")
+        self._on_key()
+
+    def _ac3_click(self, row: dict):
+        """Калимаи интихобшударо дар равзанаи 3 иваз мекунад."""
+        replacement = row.get("_label") or row.get("literary") or row.get("dialect_form", "")
+        if not replacement or not hasattr(self, "_ac_source_w3") or self._ac_source_w3 is None:
+            return
+        ws, we = self._ac_source_w3
+        self.right_text.configure(state="normal")
+        try:
+            original = self.right_text.get(ws, we)
+            self.right_text.delete(ws, we)
+            self.right_text.insert(ws, _apply_case(original, replacement))
+        except tk.TclError:
+            pass
+        finally:
+            self.right_text.configure(state="disabled")
+        self._ac_source_w3 = None
+        if hasattr(self, "_typing_right_strip"):
+            self._show_ac_strip(
+                self._typing_right_strip, self._typing_right_cv,
+                self._typing_right_inner, [], None)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # СЕРМАЪНО — клики рост дар равзанаи 3
+    # ══════════════════════════════════════════════════════════════════════
+    def _mark_polysemy_words(self):
+        """Калимаҳои сермаъноро дар равзанаи 3 зерхат мекунад.
+        Муқоиса бо қисми БАЪДИ '#' дар сутуни meaning анҷом мешавад."""
+        import re as _re
+        self.right_text.tag_remove("poly_mark", "1.0", "end")
+        poly_map = db.get_polysemy_matches()   # {баъди_#: [пеш аз_#, ...]}
+        if not poly_map:
+            return
+        content = self.right_text.get("1.0", "end")
+        found = False
+        for m in _re.finditer(r"[^\W\d_]+", content, _re.UNICODE):
+            if m.group(0).lower() in poly_map:
+                self.right_text.tag_add("poly_mark",
+                    f"1.0+{m.start()}c", f"1.0+{m.end()}c")
+                found = True
+        if found:
+            # Тегро аз ҳама болотар мегузорем то зери тегҳои дигар пинҳон нашавад
+            self.right_text.tag_raise("poly_mark")
+
+    def _right_click_poly(self, event):
+        """Клики рост дар равзанаи 3 — менюи вариантҳои сермаъно.
+        Пешниҳод: қисми ПЕШ АЗ '#'; муқоиса бо қисми БАЪДИ '#' буд."""
+        try:
+            ws, we, word = self._word_at_coord(self.right_text, event.x, event.y)
+        except (tk.TclError, ValueError, IndexError):
+            return
+        if len(word) < 2:
+            return
+        poly_map = db.get_polysemy_matches()
+        alts = poly_map.get(word.lower(), [])
+        if not alts:
+            return
+        menu = tk.Menu(self, tearoff=0, font=("Segoe UI", 10))
+        menu.add_command(label=f"  {word}", state="disabled",
+                         font=("Segoe UI", 10, "bold"))
+        menu.add_separator()
+        for alt in alts:
+            menu.add_command(
+                label=f"  {alt}",
+                command=lambda a=alt, w=ws, e=we: self._poly_replace(w, e, a))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _poly_replace(self, ws: str, we: str, replacement: str):
+        """Калимаи сермаъноро дар равзанаи 3 иваз мекунад ва боз скан мекунад."""
+        self.right_text.configure(state="normal")
+        try:
+            original = self.right_text.get(ws, we)
+            self.right_text.delete(ws, we)
+            self.right_text.insert(ws, _apply_case(original, replacement))
+        except tk.TclError:
+            pass
+        finally:
+            self.right_text.configure(state="disabled")
+        # Дубора скан — шояд калимаи нав ҳам дар базаи сермаъно бошад
+        self._mark_polysemy_words()
+
+    # ── Speech-to-Text (нутқ → матн) ──────────────────────────────────────
+    # Лотинии тоҷикӣ → Кириллии тоҷикӣ
+    _LAT2CYR = [
+        # Диграфҳо аввал
+        ("gh", "ғ"), ("kh", "х"), ("sh", "ш"), ("ch", "ч"),
+        ("zh", "ж"), ("ts", "тс"), ("yo", "ё"),
+        ("ii", "ӣ"), ("uu", "ӯ"),
+        # Ҳарфҳои танҳо
+        ("a", "а"), ("b", "б"), ("d", "д"), ("e", "е"), ("f", "ф"),
+        ("g", "г"), ("h", "ҳ"), ("i", "и"), ("j", "ҷ"), ("k", "к"),
+        ("l", "л"), ("m", "м"), ("n", "н"), ("o", "о"), ("p", "п"),
+        ("q", "қ"), ("r", "р"), ("s", "с"), ("t", "т"), ("u", "у"),
+        ("v", "в"), ("w", "в"), ("x", "х"), ("y", "й"), ("z", "з"),
+    ]
+
+    # Номи ҳарфҳо → ҳарфи воқеӣ (корбар номи ҳарфро мегӯяд)
+    _CHAR_NAMES: dict = {
+        "қоф": "қ", "қаф": "қ", "qof": "қ", "qaf": "қ",
+        "ҷим": "ҷ", "ҷем": "ҷ", "jim": "ҷ", "jem": "ҷ",
+        "ии": "ӣ", "ии борик": "ӣ", "и борик": "ӣ",
+        "ҳе": "ҳ", "ҳо": "ҳ", "he": "ҳ", "ha": "ҳ",
+        "ғайн": "ғ", "ғаин": "ғ", "ghajn": "ғ", "ghayn": "ғ",
+        "уу": "ӯ", "уу гурда": "ӯ", "у гурда": "ӯ",
+        # Агар Whisper матни русиро бидиҳад
+        "це": "қ", "же": "ҷ", "ха": "ҳ", "хе": "ҳ",
+    }
+
+    # Ислоҳи матни Кириллии стандартии Whisper
+    _CYR_CORRECTIONS: list = [
+        ("дж", "ҷ"), ("дз", "ҷ"),
+        ("гх", "ғ"), ("гь", "ғ"),
+        ("хх", "ҳ"),
+        ("й й", "ӣ"),
+    ]
+
+    @staticmethod
+    def _to_cyrillic(text: str) -> str:
+        """Матни лотинии тоҷикиро ба Кириллӣ табдил медиҳад."""
+        # Агар Кириллӣ аллакай зиёд бошад — тағйир надиҳ
+        cyr = sum(1 for c in text if "Ѐ" <= c <= "ӿ")
+        lat = sum(1 for c in text if c.isalpha() and c.isascii())
+        if cyr >= lat:
+            return text
+
+        result = []
+        tl = text.lower()
+        i = 0
+        while i < len(tl):
+            matched = False
+            for lat_seq, cyr_char in DialectApp._LAT2CYR:
+                if tl[i:i + len(lat_seq)] == lat_seq:
+                    # Сармо нигоҳ дорем
+                    if text[i].isupper():
+                        result.append(cyr_char.upper())
+                    else:
+                        result.append(cyr_char)
+                    i += len(lat_seq)
+                    matched = True
+                    break
+            if not matched:
+                result.append(text[i])
+                i += 1
+        return "".join(result)
+
+    @staticmethod
+    def _post_process_voice(text: str) -> str:
+        """Матни шинохташударо барои ҳарфҳои махсуси тоҷикӣ ислоҳ мекунад."""
+        t = text.strip()
+        key = t.lower()
+        # Агар корбар номи ҳарфро гуфта бошад — ҳарфи воқеӣро бидеҳ
+        if key in DialectApp._CHAR_NAMES:
+            return DialectApp._CHAR_NAMES[key]
+        # Ислоҳи хатоҳои маъмули Whisper
+        for wrong, right in DialectApp._CYR_CORRECTIONS:
+            t = t.replace(wrong, right)
+        return t
+
+    def _start_voice_input(self):
+        """Микрофонро фаъол мекунад ва нутқро ба тоҷикии Кириллӣ табдил медиҳад.
+        Марҳила 1 — Whisper (офлайн, тоҷикии нативӣ).
+        Марҳила 2 — Google STT + транслитератсия (захира).
+        """
+        import threading
+
+        if self._mic_recording:
+            return
+
+        self._mic_recording = True
+        if hasattr(self, "_mic_btn"):
+            self._mic_btn.config(text="⏺", bg="#c0392b", activebackground="#a93226")
+
+        def _listen():
+            import tempfile, os as _os
+            text = None
+            audio_obj = None  # sr.AudioData — захира барои Google
+
+            try:
+                import speech_recognition as sr
+                r = sr.Recognizer()
+                r.energy_threshold = 300
+                r.dynamic_energy_threshold = True
+
+                with sr.Microphone() as source:
+                    r.adjust_for_ambient_noise(source, duration=0.4)
+                    self.after(0, lambda: self._mic_btn.config(text="🔴", bg="#e74c3c", activebackground="#c0392b") if hasattr(self, "_mic_btn") else None)
+                    audio_obj = r.listen(source, timeout=10, phrase_time_limit=20)
+
+                # ── Марҳила 1: Whisper ──────────────────────────────────
+                try:
+                    from faster_whisper import WhisperModel
+
+                    # Модел бори аввал боргузорӣ мешавад (tiny ≈ 75 МБ)
+                    if not hasattr(DialectApp, "_whisper_model"):
+                        self.after(0, lambda: self._mic_btn.config(text="⚙", bg="#e67e22", activebackground="#ca6f1e") if hasattr(self, "_mic_btn") else None)
+                        DialectApp._whisper_model = WhisperModel(
+                            "tiny", device="cpu", compute_type="int8")
+
+                    wav = audio_obj.get_wav_data(
+                        convert_rate=16000, convert_width=2)
+                    tmp = tempfile.NamedTemporaryFile(
+                        suffix=".wav", delete=False)
+                    tmp.write(wav); tmp.close()
+                    try:
+                        segs, _ = DialectApp._whisper_model.transcribe(
+                            tmp.name, language="tg", beam_size=5)
+                        text = " ".join(s.text.strip() for s in segs).strip()
+                        if text:
+                            text = DialectApp._post_process_voice(text)
+                    finally:
+                        _os.unlink(tmp.name)
+                except Exception:
+                    pass
+
+                # ── Марҳила 2: Google STT + транслитератсия ─────────────
+                if not text and audio_obj:
+                    for lang in ("ru-RU", "tg-TJ"):
+                        try:
+                            raw = r.recognize_google(audio_obj, language=lang)
+                            text = DialectApp._post_process_voice(
+                                DialectApp._to_cyrillic(raw))
+                            break
+                        except Exception:
+                            continue
+
+            except Exception:
+                pass
+            finally:
+                if text:
+                    self.after(0, lambda t=text: self._insert_voice_text(t))
+                self.after(0, self._mic_done)
+
+        threading.Thread(target=_listen, daemon=True).start()
+
+    def _insert_voice_text(self, text: str):
+        """Матни шинохташударо ба равзанаи 1 мегузорад ва таҳлил мекунад."""
+        self.inp.configure(state="normal")
+        cur = self.inp.get("1.0", "end").strip()
+        if cur:
+            self.inp.insert("end", " " + text)
+        else:
+            self.inp.delete("1.0", "end")
+            self.inp.insert("1.0", text)
+        self._on_key(None)
+
+    def _mic_done(self):
+        """Пас аз сабт тугмаро барқарор мекунад."""
+        self._mic_recording = False
+        if hasattr(self, "_mic_anim_id") and self._mic_anim_id:
+            try:
+                self.after_cancel(self._mic_anim_id)
+            except Exception:
+                pass
+            self._mic_anim_id = None
+        if hasattr(self, "_mic_btn"):
+            self._mic_btn.config(text="🎤", bg="#3498db", activebackground="#2475a8")
+
+    def _show_morph_mid(self, text: str, wr_map: dict | None = None):
+        """
+        Дар равзанаи дувум ҳар калимаро ба қисматҳо ҷудо мекунад:
+          реша  → сурх+ғафс (агар калима лаҳҷавӣ бошад), вагарна сиёҳ+ғафс
+          пешванди дуруст    → сиёҳ
+          пешванди ношинохта → сурх+ғафс
+          пасванди дуруст    → сиёҳ
+          пасванди ношинохта → сурх+ғафс
+          реша ёфт нашуд     → хокистарӣ
+        """
+        _DIALECT_TYPES = {"dialect", "both", "dialect_phrase",
+                          "dialect_stem", "elision_corrected"}
+
+        conn = db.get_connection()
+        root_rows = conn.execute(
+            "SELECT lower(root) AS r FROM roots"
+            " ORDER BY length(root) DESC, root ASC"
+        ).fetchall()
+        all_roots  = [r["r"] for r in root_rows if len(r["r"]) >= 2]
+        prefix_set = {r["prefix"].lower()
+                      for r in conn.execute("SELECT prefix FROM prefixes").fetchall()}
+        suffix_set = {r["suffix"].lower()
+                      for r in conn.execute("SELECT suffix FROM suffixes").fetchall()}
+        conn.close()
+
+        CK = C["text"]     # сиёҳ  — адабӣ / стандартӣ
+        CR = "#c0392b"     # сурх  — лаҳҷавӣ / ношинохта
+        CN = C["neutral"]  # хокистарӣ — реша нест
+        FN = ("Segoe UI", 12)
+        FB = ("Segoe UI", 12, "bold")
+
+        self.mid_text.configure(state="normal")
+        self.mid_text.delete("1.0", "end")
+        self.mid_text.tag_configure("m_root_lit",  foreground=CK, font=FB)
+        self.mid_text.tag_configure("m_root_dial", foreground=CR, font=FB)
+        self.mid_text.tag_configure("m_pfx_ok",    foreground=CK, font=FN)
+        self.mid_text.tag_configure("m_pfx_bad",   foreground=CR, font=FB)
+        self.mid_text.tag_configure("m_sfx_ok",    foreground=CK, font=FN)
+        self.mid_text.tag_configure("m_sfx_bad",   foreground=CR, font=FB)
+        self.mid_text.tag_configure("m_none",       foreground=CN, font=FN)
+
+        for tok, is_word in _tokenize(text):
+            if not is_word:
+                self.mid_text.insert("end", tok)
+                continue
+
+            tl = tok.lower()
+
+            # Лаҳҷавӣ будани калимаро аз wr_map муайян мекунем
+            is_dialect = False
+            if wr_map:
+                matched, wtype, _ = wr_map.get(tl, ([], "unknown", None))
+                is_dialect = bool(matched) and wtype in _DIALECT_TYPES
+
+            # Дарозтарин решаро, ки дар калима ҳаст, меёбем
+            found_root = None
+            root_pos   = -1
+            for root in all_roots:
+                idx = tl.find(root)
+                if idx != -1:
+                    found_root = root
+                    root_pos   = idx
+                    break
+
+            if found_root is None:
+                # Реша нашуд — агар лаҳҷавӣ бошад сурх, вагарна хокистарӣ
+                tag = "m_root_dial" if is_dialect else "m_none"
+                self.mid_text.insert("end", tok, tag)
+                continue
+
+            root_end    = root_pos + len(found_root)
+            prefix_part = tok[:root_pos]
+            root_part   = tok[root_pos:root_end]
+            suffix_part = tok[root_end:]
+
+            if prefix_part:
+                tag = ("m_pfx_ok" if prefix_part.lower() in prefix_set
+                       else "m_pfx_bad")
+                self.mid_text.insert("end", prefix_part, tag)
+
+            # Реша: сурх агар лаҳҷавӣ, вагарна сиёҳ
+            root_tag = "m_root_dial" if is_dialect else "m_root_lit"
+            self.mid_text.insert("end", root_part, root_tag)
+
+            if suffix_part:
+                tag = ("m_sfx_ok" if suffix_part.lower() in suffix_set
+                       else "m_sfx_bad")
+                self.mid_text.insert("end", suffix_part, tag)
+
+        self.mid_text.configure(state="disabled")
+
+    def _load_verbs(self) -> set:
+        """Ҳамаи феълҳоро аз базаи маълумот бармегардонад (шаклҳои адабӣ)."""
+        conn = db.get_connection()
+        verbs: set[str] = set()
+        # Инфинитивҳо ва реша аз verb_forms
+        for r in conn.execute(
+                "SELECT lower(infinitive), lower(present_stem), lower(past_stem)"
+                " FROM verb_forms").fetchall():
+            for v in r:
+                if v and v.strip():
+                    verbs.add(v.strip())
+        # Шаклҳои адабии феълҳо аз ҷадвали words
+        for r in conn.execute(
+                "SELECT lower(literary), lower(dialect_form)"
+                " FROM words WHERE pos='феъл'").fetchall():
+            for v in r:
+                if v and v.strip():
+                    verbs.add(v.strip())
+        # Решаҳои феълӣ
+        for r in conn.execute(
+                "SELECT lower(root) FROM roots WHERE pos='феъл'").fetchall():
+            if r[0] and r[0].strip():
+                verbs.add(r[0].strip())
+        conn.close()
+        return verbs
+
+    def _apply_ba_correction(self):
+        """
+        Дар матни равзанаи севвум "ба/Ба + феъл"-ро меёбад ва
+        "ба/Ба"-ро бо "баъд/Баъд" иваз мекунад.
+        Феъл будани калима аз рӯи базаи маълумот санҷида мешавад.
+        """
+        import re
+        verbs = self._load_verbs()
+        if not verbs:
+            return
+
+        full = self.right_text.get("1.0", "end-1c")
+        if not full.strip():
+            return
+
+        # Тақсим ба токенҳо бо нигоҳ доштани фосилаҳо
+        parts = re.split(r'(\s+)', full)
+
+        offset = 0
+        replacements = []  # [(start_char, end_char, new_text)]
+
+        i = 0
+        while i < len(parts):
+            tok = parts[i]
+            if tok.lower() == "ба" and i + 2 < len(parts):
+                # Аломатҳои китобатиро аз калимаи баъдӣ мебароем
+                raw_next = parts[i + 2]
+                next_word = re.sub(r'[^\wҷқҳғӯӣЧҚҲҒӮӢ]', '', raw_next,
+                                   flags=re.UNICODE).lower()
+                if next_word and next_word in verbs:
+                    new_tok = "Баъд" if tok[0].isupper() else "баъд"
+                    replacements.append((offset, offset + len(tok), new_tok))
+            offset += len(tok)
+            i += 1
+
+        if not replacements:
+            return
+
+        # Иваз аз охир ба аввал (то мавқеъҳо дигар нашаванд)
+        self.right_text.configure(state="normal")
+        for start_c, end_c, new_tok in reversed(replacements):
+            start_idx = f"1.0+{start_c}c"
+            end_idx   = f"1.0+{end_c}c"
+            existing_tags = self.right_text.tag_names(start_idx)
+            self.right_text.delete(start_idx, end_idx)
+            self.right_text.insert(start_idx, new_tok, existing_tags)
+        self.right_text.configure(state="disabled")
+
     def _reset(self):
         self.mid_text.configure(state="normal")
         self.mid_text.delete("1.0", "end")
@@ -1037,16 +1974,34 @@ class DialectApp(tk.Tk):
         self.winner_name.config(text="—", fg=C["winner_fg"])
         self.winner_region.config(text="")
         self.conf_lbl.config(text="")
+        if hasattr(self, "_stats_lbl"):
+            self._stats_lbl.config(text="")
+        if hasattr(self, "_unknown_lbl"):
+            self._unknown_lbl.config(text="")
 
         self._clear_variants()
         self._clear_rvar()
         self.char_lbl.config(text="0 ҳарф")
+        self._tts_stop()
+        self._tts_done()
+        self._ai_spin_lbl.config(text="")
+        self._ai_sugg_text.configure(state="normal")
+        self._ai_sugg_text.delete("1.0", "end")
+        self._ai_sugg_text.configure(state="disabled")
 
         self.analysis_text.configure(state="normal")
         self.analysis_text.delete("1.0", "end")
         self.analysis_text.insert("end",
             "Натиҷаи муайян намудани матн ба кадом ноҳия мувофиқат мекунад")
         self.analysis_text.configure(state="disabled")
+
+        # Ҳар ду полоси автокомплитро холӣ мекунем
+        if hasattr(self, "_ac1_strip"):
+            self._show_ac_strip(self._ac1_strip, self._ac1_cv,
+                                self._ac1_inner, [], None)
+        if hasattr(self, "_ac3_strip"):
+            self._show_ac_strip(self._ac3_strip, self._ac3_cv,
+                                self._ac3_inner, [], None)
 
     def _insert_char(self, ch):
         self.inp.focus_set()
@@ -1524,27 +2479,56 @@ class DialectApp(tk.Tk):
                 cdlg.resizable(False, False)
                 cdlg.grab_set()
                 cdlg.update_idletasks()
-                cw, ch = 320, 210
+                _c = _load_contact()
+                has_photo = bool(_c.get("photo", ""))
+                cw = 340; ch = 270 if has_photo else 210
                 csw, csh = cdlg.winfo_screenwidth(), cdlg.winfo_screenheight()
                 cdlg.geometry(f"{cw}x{ch}+{(csw-cw)//2}+{(csh-ch)//2}")
 
                 tk.Frame(cdlg, bg="#e67e22", height=3).pack(fill="x")
-
                 tk.Label(cdlg, text="📞  Муроҷиат ба Админ",
                          font=("Segoe UI", 11, "bold"), bg=BG, fg="#e67e22").pack(pady=(14, 4))
                 tk.Frame(cdlg, bg="#21262d", height=1).pack(fill="x", padx=16, pady=(0, 10))
+
+                # ── Расм ────────────────────────────────────────────────
+                _cv_ref = [None]
+                if has_photo:
+                    PSIZ = 70
+                    try:
+                        import base64, io as _io
+                        raw = base64.b64decode(_c["photo"])
+                        try:
+                            from PIL import Image, ImageTk
+                            img = Image.open(_io.BytesIO(raw)).convert("RGBA")
+                            img = img.resize((PSIZ, PSIZ), Image.LANCZOS)
+                            tk_img = ImageTk.PhotoImage(img)
+                        except ImportError:
+                            import tempfile, os as _os
+                            tmp = tempfile.NamedTemporaryFile(
+                                delete=False, suffix=".png")
+                            tmp.write(raw); tmp.close()
+                            tk_img = tk.PhotoImage(file=tmp.name)
+                            _os.unlink(tmp.name)
+                            fac = max(1, max(tk_img.width(),
+                                            tk_img.height()) // PSIZ)
+                            if fac > 1:
+                                tk_img = tk_img.subsample(fac, fac)
+                        _cv_ref[0] = tk_img
+                        ph_lbl = tk.Label(cdlg, image=tk_img, bg=BG)
+                        ph_lbl.image = tk_img
+                        ph_lbl.pack(pady=(0, 6))
+                    except Exception:
+                        pass
 
                 cf = tk.Frame(cdlg, bg=BG)
                 cf.pack(fill="x", padx=20)
                 cf.columnconfigure(1, weight=1)
 
-                _c = _load_contact()
-                ADMIN_INFO = [
+                for row, (lbl, val) in enumerate([
                     ("👤 Ном:",   _c["name"]),
                     ("📧 Email:", _c["email"]),
                     ("📱 Тел:",   _c["phone"]),
-                ]
-                for row, (lbl, val) in enumerate(ADMIN_INFO):
+                ]):
                     tk.Label(cf, text=lbl, bg=BG, fg="#8b949e",
                              font=("Segoe UI", 9)).grid(
                              row=row, column=0, sticky="e", padx=(0, 10), pady=5)
@@ -1552,10 +2536,9 @@ class DialectApp(tk.Tk):
                              font=("Segoe UI", 9, "bold")).grid(
                              row=row, column=1, sticky="w", pady=5)
 
-                import webbrowser
                 def _copy_email():
                     cdlg.clipboard_clear()
-                    cdlg.clipboard_append("jeki-102011@mail.ru")
+                    cdlg.clipboard_append(_c["email"])
                     copy_btn.config(text="✔  Нусха шуд!")
                     cdlg.after(1500, lambda: copy_btn.config(text="📋  Email нусха"))
 
@@ -1606,7 +2589,9 @@ class DialectApp(tk.Tk):
             cdlg.resizable(False, False)
             cdlg.grab_set()
             cdlg.update_idletasks()
-            cw, ch = 320, 220
+            _c2 = _load_contact()
+            has_photo2 = bool(_c2.get("photo", ""))
+            cw = 340; ch = 275 if has_photo2 else 220
             csw, csh = cdlg.winfo_screenwidth(), cdlg.winfo_screenheight()
             cdlg.geometry(f"{cw}x{ch}+{(csw-cw)//2}+{(csh-ch)//2}")
 
@@ -1616,10 +2601,39 @@ class DialectApp(tk.Tk):
                      bg=BG, fg="#e67e22").pack(pady=(14, 4))
             tk.Frame(cdlg, bg="#21262d", height=1).pack(fill="x", padx=16, pady=(0, 10))
 
+            # ── Расм ────────────────────────────────────────────────────
+            _cv2_ref = [None]
+            if has_photo2:
+                PSIZ2 = 70
+                try:
+                    import base64, io as _io
+                    raw = base64.b64decode(_c2["photo"])
+                    try:
+                        from PIL import Image, ImageTk
+                        img = Image.open(_io.BytesIO(raw)).convert("RGBA")
+                        img = img.resize((PSIZ2, PSIZ2), Image.LANCZOS)
+                        tk_img = ImageTk.PhotoImage(img)
+                    except ImportError:
+                        import tempfile, os as _os
+                        tmp = tempfile.NamedTemporaryFile(
+                            delete=False, suffix=".png")
+                        tmp.write(raw); tmp.close()
+                        tk_img = tk.PhotoImage(file=tmp.name)
+                        _os.unlink(tmp.name)
+                        fac = max(1, max(tk_img.width(),
+                                        tk_img.height()) // PSIZ2)
+                        if fac > 1:
+                            tk_img = tk_img.subsample(fac, fac)
+                    _cv2_ref[0] = tk_img
+                    ph_lbl2 = tk.Label(cdlg, image=tk_img, bg=BG)
+                    ph_lbl2.image = tk_img
+                    ph_lbl2.pack(pady=(0, 6))
+                except Exception:
+                    pass
+
             cf = tk.Frame(cdlg, bg=BG)
             cf.pack(fill="x", padx=24)
             cf.columnconfigure(1, weight=1)
-            _c2 = _load_contact()
             for row, (lbl, val) in enumerate([
                 ("👤 Ном:",   _c2["name"]),
                 ("📧 Email:", _c2["email"]),
@@ -1634,7 +2648,7 @@ class DialectApp(tk.Tk):
 
             def _copy():
                 cdlg.clipboard_clear()
-                cdlg.clipboard_append("jeki-102011@mail.ru")
+                cdlg.clipboard_append(_c2["email"])
                 cb.config(text="✔  Нусха шуд!")
                 cdlg.after(1500, lambda: cb.config(text="📋  Email нусха"))
 
@@ -1677,6 +2691,112 @@ class DialectApp(tk.Tk):
     def _setup_global_keyboard(self):
         tajik_keys.setup(self)         # bind_class як бор сабт мешавад
         tajik_keys.walk_and_bind(self) # ҳамаи widget-ҳои мавҷуда
+        self.bind_all("<F1>", lambda e: self._show_help())
+
+    # ══════════════════════════════════════════════════════════════════════
+    # ДАСТУРАМАЛ — F1
+    # ══════════════════════════════════════════════════════════════════════
+    def _show_help(self):
+        dlg = tk.Toplevel(self)
+        dlg.title("Дастурамал")
+        dlg.configure(bg=C["bg"])
+        dlg.resizable(False, False)
+        dlg.grab_set()
+
+        W = 520; H = 580
+        dlg.geometry(f"{W}x{H}+{(dlg.winfo_screenwidth()-W)//2}"
+                     f"+{(dlg.winfo_screenheight()-H)//2}")
+
+        # ── Сарлавҳа ──────────────────────────────────────────────────────
+        hdr = tk.Frame(dlg, bg="#1a3a5c", pady=14)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="📖  Дастурамали барнома",
+                 font=("Segoe UI", 14, "bold"),
+                 bg="#1a3a5c", fg="white").pack()
+        tk.Label(hdr, text="Лаҳҷаҳои Тоҷикистон  —  Версия 1.2.0",
+                 font=("Segoe UI", 9), bg="#1a3a5c", fg="#aac8e8").pack()
+
+        # ── Мундариҷа ─────────────────────────────────────────────────────
+        canvas = tk.Canvas(dlg, bg=C["bg"], highlightthickness=0)
+        sb = tk.Scrollbar(dlg, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        canvas.pack(fill="both", expand=True, padx=0)
+
+        frame = tk.Frame(canvas, bg=C["bg"])
+        canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>",
+                   lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        def _scroll(e):
+            canvas.yview_scroll(-1*(e.delta//120), "units")
+
+        def _bind_scroll(widget):
+            widget.bind("<MouseWheel>", _scroll)
+            for child in widget.winfo_children():
+                _bind_scroll(child)
+
+        canvas.bind("<MouseWheel>", _scroll)
+        frame.bind("<Configure>", lambda e: (
+            canvas.configure(scrollregion=canvas.bbox("all")),
+            _bind_scroll(frame)
+        ))
+
+        def section(title, color="#1a3a5c"):
+            tk.Frame(frame, bg=color, height=2).pack(fill="x", padx=12, pady=(14,2))
+            tk.Label(frame, text=title, font=("Segoe UI", 11, "bold"),
+                     bg=C["bg"], fg=color, anchor="w").pack(fill="x", padx=14)
+
+        def row(icon, text):
+            r = tk.Frame(frame, bg=C["bg"])
+            r.pack(fill="x", padx=18, pady=2)
+            tk.Label(r, text=icon, font=("Segoe UI", 10),
+                     bg=C["bg"], fg="#555", width=3, anchor="w").pack(side="left")
+            tk.Label(r, text=text, font=("Segoe UI", 10),
+                     bg=C["bg"], fg=C["text"], anchor="w", wraplength=420,
+                     justify="left").pack(side="left", fill="x")
+
+        # ── Дар бораи барнома ──────────────────────────────────────────────
+        section("ℹ️  Дар бораи барнома", "#1a3a5c")
+        row("👤", "Муаллиф:  Холмуродов Раҷабали")
+        row("📅", "Сохта шуд:  2024 — 2025")
+        row("🔖", "Версия:  1.2.0")
+        row("📧", "Почта:  rajabaliit1995@mail.com")
+        row("📞", "Телефон:  +992 985111995")
+        row("🎯", "Мақсад:  Муайян кардани лаҳҷаи тоҷикии матн тавассути таҳлили луғавӣ")
+
+        # ── Чи тавр истифода бурдан ───────────────────────────────────────
+        section("🚀  Чи тавр истифода бурдан", "#27ae60")
+        row("1️⃣", "Матни лаҳҷавиро дар майдони чап нависед ё paste кунед")
+        row("2️⃣", "Тугмаи «Таҳлил» пахш кунед ё Ctrl+Enter")
+        row("3️⃣", "Натиҷа дар тарафи рост нишон дода мешавад")
+        row("4️⃣", "Лаҳҷаи мувофиқ бо фоиз муайян мешавад")
+        row("5️⃣", "Калимаҳои лаҳҷавӣ бо ранг ишора мешаванд")
+
+        # ── Тугмаҳои клавиатура ───────────────────────────────────────────
+        section("⌨️  Тугмаҳои клавиатура", "#8e44ad")
+        row("F1", "Ин дастурамал")
+        row("Ctrl+Enter", "Таҳлил кардан")
+        row("Ctrl+Z", "Тоза кардани матн")
+
+        # ── Имконоти барнома ──────────────────────────────────────────────
+        section("⚙️  Имконоти барнома", "#e67e22")
+        row("📊", "Омор — оморҳои умумии луғат ва лаҳҷаҳо")
+        row("📚", "Луғат — иловаи калимаҳои нав ба луғат")
+        row("🤖", "AI — тавзеҳи иловагӣ аз тарафи зеҳни сунъӣ")
+        row("🔑", "Парол — иваз кардани пароли худ")
+
+        # ── Поён ──────────────────────────────────────────────────────────
+        tk.Frame(frame, bg="#eee", height=1).pack(fill="x", padx=12, pady=(16, 4))
+        tk.Label(frame, text="© 2024–2025  Холмуродов Раҷабали  |  Ҳуқуқ ҳифз аст",
+                 font=("Segoe UI", 8), bg=C["bg"], fg=C["text3"]).pack(pady=(0, 12))
+
+        # ── Тугмаи пӯшидан ────────────────────────────────────────────────
+        tk.Button(dlg, text="✕  Пӯшидан", font=("Segoe UI", 10, "bold"),
+                  bg="#1a3a5c", fg="white", relief="flat", cursor="hand2",
+                  pady=8, command=dlg.destroy).pack(fill="x", padx=0, pady=0)
+
+        dlg.wait_window()
 
     # ══════════════════════════════════════════════════════════════════════
     # БЕКАП
@@ -1841,7 +2961,7 @@ class DialectApp(tk.Tk):
             cdlg.resizable(False, False)
             cdlg.grab_set()
             cdlg.update_idletasks()
-            cw, ch = 360, 250
+            cw, ch = 420, 370
             csw = cdlg.winfo_screenwidth(); csh = cdlg.winfo_screenheight()
             cdlg.geometry(f"{cw}x{ch}+{(csw-cw)//2}+{(csh-ch)//2}")
 
@@ -1852,6 +2972,102 @@ class DialectApp(tk.Tk):
             tk.Frame(cdlg, bg=BG3, height=1).pack(fill="x", padx=16, pady=(0, 8))
 
             cur = _load_contact()
+
+            # ── Расм (аватар) ───────────────────────────────────────────
+            PSIZ = 90
+            photo_b64 = [cur.get("photo", "")]   # mutable container
+            _ph_ref   = [None]                    # PhotoImage reference
+
+            ph_row = tk.Frame(cdlg, bg=BG)
+            ph_row.pack(pady=(0, 8))
+
+            ph_canvas = tk.Canvas(ph_row, width=PSIZ, height=PSIZ,
+                                  bg="#2d333b", highlightthickness=2,
+                                  highlightbackground="#444c56")
+            ph_canvas.pack(side="left", padx=(20, 14))
+
+            def _draw_photo():
+                ph_canvas.delete("all")
+                b64 = photo_b64[0]
+                if b64:
+                    try:
+                        import base64, io as _io
+                        raw = base64.b64decode(b64)
+                        try:
+                            from PIL import Image, ImageTk
+                            img = Image.open(_io.BytesIO(raw)).convert("RGBA")
+                            img = img.resize((PSIZ, PSIZ), Image.LANCZOS)
+                            tk_img = ImageTk.PhotoImage(img)
+                        except ImportError:
+                            import tempfile, os as _os
+                            tmp = tempfile.NamedTemporaryFile(
+                                delete=False, suffix=".png")
+                            tmp.write(raw); tmp.close()
+                            tk_img = tk.PhotoImage(file=tmp.name)
+                            _os.unlink(tmp.name)
+                            fac = max(1, max(tk_img.width(),
+                                            tk_img.height()) // PSIZ)
+                            if fac > 1:
+                                tk_img = tk_img.subsample(fac, fac)
+                        _ph_ref[0] = tk_img
+                        ph_canvas.create_image(
+                            PSIZ // 2, PSIZ // 2, image=tk_img)
+                        return
+                    except Exception:
+                        pass
+                # Placeholder
+                ph_canvas.create_oval(4, 4, PSIZ-4, PSIZ-4,
+                                      fill="#444c56", outline="#586069")
+                ph_canvas.create_text(PSIZ//2, PSIZ//2, text="👤",
+                                      font=("Segoe UI", 32), fill="#8b949e")
+
+            _draw_photo()
+
+            ph_btns = tk.Frame(ph_row, bg=BG)
+            ph_btns.pack(side="left")
+
+            def _pick_photo():
+                from tkinter import filedialog
+                path = filedialog.askopenfilename(
+                    parent=cdlg, title="Расми профил интихоб кунед",
+                    filetypes=[("Расм", "*.png *.jpg *.jpeg *.gif *.bmp"),
+                               ("Ҳама", "*.*")])
+                if not path:
+                    return
+                try:
+                    import base64, io as _io
+                    try:
+                        from PIL import Image
+                        img = Image.open(path).convert("RGBA")
+                        img.thumbnail((300, 300), Image.LANCZOS)
+                        buf = _io.BytesIO()
+                        img.save(buf, format="PNG")
+                        photo_b64[0] = base64.b64encode(
+                            buf.getvalue()).decode()
+                    except ImportError:
+                        with open(path, "rb") as f:
+                            photo_b64[0] = base64.b64encode(
+                                f.read()).decode()
+                    _draw_photo()
+                except Exception:
+                    pass
+
+            def _del_photo():
+                photo_b64[0] = ""
+                _draw_photo()
+
+            tk.Button(ph_btns, text="🖼  Расм интихоб",
+                      command=_pick_photo,
+                      font=("Segoe UI", 8, "bold"),
+                      bg="#1a5276", fg="white", relief="flat",
+                      cursor="hand2", padx=10, pady=5).pack(pady=(0, 6))
+            tk.Button(ph_btns, text="🗑  Хариш",
+                      command=_del_photo,
+                      font=("Segoe UI", 8),
+                      bg="#7a1a1a", fg="white", relief="flat",
+                      cursor="hand2", padx=10, pady=4).pack()
+
+            # ── Майдонҳои матн ──────────────────────────────────────────
             fg = tk.Frame(cdlg, bg=BG)
             fg.pack(fill="x", padx=20)
             fg.columnconfigure(1, weight=1)
@@ -1879,10 +3095,12 @@ class DialectApp(tk.Tk):
 
             cmsg = tk.Label(cdlg, text="", bg=BG, fg=GRN,
                             font=("Segoe UI", 8))
-            cmsg.pack(pady=(2, 2))
+            cmsg.pack(pady=(4, 2))
 
             def _do_save():
-                _save_contact({k: v.get().strip() for k, v in fields.items()})
+                d = {k: v.get().strip() for k, v in fields.items()}
+                d["photo"] = photo_b64[0]
+                _save_contact(d)
                 cmsg.config(text="✔  Захира шуд!")
                 cdlg.after(800, cdlg.destroy)
 
@@ -1948,6 +3166,209 @@ class DialectApp(tk.Tk):
         _refresh()
 
     # ══════════════════════════════════════════════════════════════════════
+    # ══════════════════════════════════════════════════════════════════════
+    # ЛУҒАТИ ТАРҶУМА
+    # ══════════════════════════════════════════════════════════════════════
+    def _show_translator(self):
+        win = tk.Toplevel(self)
+        win.title("📖 Луғати тарҷума — лаҳҷавӣ → адабӣ")
+        win.configure(bg=C["bg"])
+        win.geometry("700x520")
+        win.minsize(560, 400)
+        W, H = 700, 520
+        win.geometry(f"{W}x{H}+{(win.winfo_screenwidth()-W)//2}+{(win.winfo_screenheight()-H)//2}")
+
+        # ── Сарлавҳа ──────────────────────────────────────────────────────
+        hdr = tk.Frame(win, bg="#1a6b3a", pady=10)
+        hdr.pack(fill="x")
+        tk.Label(hdr, text="📖  Луғати тарҷума",
+                 font=("Segoe UI", 13, "bold"),
+                 bg="#1a6b3a", fg="white").pack()
+        tk.Label(hdr, text="Калимаи лаҳҷавиро нависед — дар таҳлил ба адабӣ тарҷума мешавад",
+                 font=("Segoe UI", 9), bg="#1a6b3a", fg="#a8d5b5").pack()
+
+        # ── Ҷустуҷӯ ───────────────────────────────────────────────────────
+        sf = tk.Frame(win, bg=C["bg"], pady=6)
+        sf.pack(fill="x", padx=10)
+        tk.Label(sf, text="🔍", font=("Segoe UI", 11),
+                 bg=C["bg"]).pack(side="left")
+        search_v = tk.StringVar()
+        se = tk.Entry(sf, textvariable=search_v, font=("Segoe UI", 11),
+                      relief="solid", bd=1, width=30)
+        se.pack(side="left", padx=6)
+        count_lbl = tk.Label(sf, text="", font=("Segoe UI", 9),
+                             bg=C["bg"], fg=C["text3"])
+        count_lbl.pack(side="left", padx=4)
+
+        # ── Ҷадвал ────────────────────────────────────────────────────────
+        cols = ("dialect_word", "literary", "note")
+        tree = ttk.Treeview(win, columns=cols, show="headings", height=16)
+        tree.heading("dialect_word", text="Калимаи лаҳҷавӣ")
+        tree.heading("literary",     text="Тарҷумаи адабӣ")
+        tree.heading("note",         text="Изоҳ")
+        tree.column("dialect_word", width=200, anchor="w")
+        tree.column("literary",     width=200, anchor="w")
+        tree.column("note",         width=200, anchor="w")
+        vsb = ttk.Scrollbar(win, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y", padx=(0,4))
+        tree.pack(fill="both", expand=True, padx=(10,0), pady=4)
+
+        # Маълумотро юклаш
+        _rows_cache: list[dict] = []
+
+        def _load(q=""):
+            nonlocal _rows_cache
+            tree.delete(*tree.get_children())
+            _rows_cache = db.tr_get_all(q)
+            for r in _rows_cache:
+                tree.insert("", "end", iid=str(r["id"]),
+                            values=(r["dialect_word"], r["literary"], r["note"]))
+            count_lbl.config(text=f"{len(_rows_cache)} ёзув")
+
+        search_v.trace_add("write", lambda *_: _load(search_v.get()))
+        _load()
+
+        # ── Тугмаҳо ───────────────────────────────────────────────────────
+        btnf = tk.Frame(win, bg=C["bg"], pady=6)
+        btnf.pack(fill="x", padx=10)
+
+        def _btn(parent, text, cmd, bg, fg="white"):
+            b = tk.Button(parent, text=text, command=cmd,
+                          font=("Segoe UI", 9, "bold"),
+                          bg=bg, fg=fg, relief="flat",
+                          cursor="hand2", padx=10, pady=5)
+            b.pack(side="left", padx=3)
+            return b
+
+        def _add_dialog(dialect_word=None, prefill_l="", edit_id=None,
+                        prefill_d=""):
+            # ADD mode with known word: shows read-only label + literary field only
+            # ADD mode without word: shows both fields (user types both)
+            # EDIT mode: always shows both fields
+            is_edit = edit_id is not None
+            dial_word = prefill_d if is_edit else (dialect_word or "").strip()
+            # If no dialect word known, show both input fields
+            need_dial_field = not dial_word
+
+            d = tk.Toplevel(win)
+            d.configure(bg=C["bg"])
+            d.grab_set()
+            d.resizable(False, False)
+
+            if is_edit or need_dial_field:
+                d.title("Таҳрир кардан" if is_edit else "Илова кардан")
+                DW, DH = 380, 210
+            else:
+                dial_display = f"«{dial_word}»"
+                d.title(f"Тарҷумаи {dial_display}")
+                DW, DH = 380, 170
+
+            d.geometry(f"{DW}x{DH}+{(d.winfo_screenwidth()-DW)//2}+{(d.winfo_screenheight()-DH)//2}")
+
+            tk.Frame(d, bg="#1a6b3a", height=4).pack(fill="x")
+            frm = tk.Frame(d, bg=C["bg"], padx=16, pady=12)
+            frm.pack(fill="both", expand=True)
+
+            def field(label, val=""):
+                tk.Label(frm, text=label, font=("Segoe UI", 9, "bold"),
+                         bg=C["bg"], fg=C["text"], anchor="w").pack(fill="x")
+                v = tk.StringVar(value=val)
+                e = tk.Entry(frm, textvariable=v, font=("Segoe UI", 11),
+                             relief="solid", bd=1)
+                e.pack(fill="x", pady=(2, 8))
+                return v, e
+
+            if is_edit or need_dial_field:
+                # Show editable dialect field
+                v_d, e_d = field("Калимаи лаҳҷавӣ:", prefill_d if is_edit else dial_word)
+                if need_dial_field:
+                    e_d.focus()
+            else:
+                # Dialect word is known — show as read-only label
+                v_d = tk.StringVar(value=dial_word)
+                tk.Label(frm, text=f"Лаҳҷавӣ: {dial_word}",
+                         font=("Segoe UI", 10, "bold"),
+                         bg=C["bg"], fg="#1a6b3a").pack(anchor="w", pady=(0, 6))
+
+            v_l, e_l = field("Тарҷумаи адабӣ:", prefill_l)
+            if not need_dial_field:
+                e_l.focus()
+            tajik_keys.walk_and_bind(d)
+
+            msg = tk.Label(frm, text="", font=("Segoe UI", 9),
+                           bg=C["bg"], fg="#c0392b")
+            msg.pack()
+
+            def _save():
+                dw = v_d.get().strip()
+                lw = v_l.get().strip()
+                if not dw:
+                    msg.config(text="⚠  Калимаи лаҳҷавӣ холӣ аст")
+                    return
+                if not lw:
+                    msg.config(text="⚠  Тарҷумаи адабиро нависед")
+                    return
+                if is_edit:
+                    res = db.tr_update(edit_id, dw, lw, "")
+                else:
+                    res = db.tr_add(dw, lw, "")
+                if res == "ok":
+                    d.destroy()
+                    _load(search_v.get())
+                elif res == "exists":
+                    msg.config(text="⚠  Ин калима аллакай мавҷуд аст")
+                else:
+                    msg.config(text="⚠  Хато рӯй дод")
+
+            bf = tk.Frame(frm, bg=C["bg"])
+            bf.pack(fill="x")
+            tk.Button(bf, text="💾 Сабт кардан", command=_save,
+                      font=("Segoe UI", 10, "bold"),
+                      bg="#1a6b3a", fg="white", relief="flat",
+                      cursor="hand2", padx=12, pady=6).pack(side="left")
+            tk.Button(bf, text="Бекор", command=d.destroy,
+                      font=("Segoe UI", 9), bg=C["btn_clear"],
+                      fg=C["btn_text"], relief="flat",
+                      cursor="hand2", padx=10, pady=6).pack(side="left", padx=6)
+            d.bind("<Return>", lambda e: _save())
+
+        def _edit():
+            sel = tree.selection()
+            if not sel:
+                return
+            rid = int(sel[0])
+            row = next((r for r in _rows_cache if r["id"] == rid), None)
+            if row:
+                _add_dialog(prefill_d=row["dialect_word"],
+                            prefill_l=row["literary"],
+                            edit_id=rid)
+
+        def _delete():
+            sel = tree.selection()
+            if not sel:
+                return
+            rid = int(sel[0])
+            row = next((r for r in _rows_cache if r["id"] == rid), None)
+            if not row:
+                return
+            if messagebox.askyesno("Ҳазф", f"«{row['dialect_word']}» ҳазф шавад?",
+                                   parent=win):
+                db.tr_delete(rid)
+                _load(search_v.get())
+
+        _btn(btnf, "➕ Илова",
+             lambda: _add_dialog(dialect_word=search_v.get()), "#1a6b3a")
+        _btn(btnf, "✏️ Таҳрир", _edit,                 "#2471a3")
+        _btn(btnf, "🗑 Ҳазф",   _delete,               "#c0392b")
+        _btn(btnf, "✕ Пӯшидан", win.destroy,           "#555", "white")
+
+        tree.bind("<Double-1>", lambda e: _edit())
+
+        # Ҳарфҳои махсуси тоҷикӣ (ҷ қ ҳ ғ ӯ ӣ)
+        tajik_keys.walk_and_bind(win)
+        _load()
+
     # Омори база
     # ══════════════════════════════════════════════════════════════════════
     def _show_stats(self):
@@ -1965,12 +3386,14 @@ class DialectApp(tk.Tk):
         FN   = ("Segoe UI", 10)
         FT   = ("Segoe UI", 10, "bold")
 
+        # (номи нишондода, арзиши сутуни region дар база)
         REGIONS = [
-            ("Вилояти Суғд",           "sugd"),
-            ("Вилояти Хатлон",         "khatlon"),
-            ("Ноҳияҳои тобеи ҷумҳурӣ", "rrs"),
-            ("ВМКБ — Бадахшон",        "vmkb"),
+            ("Вилояти Суғд",           "Суғд"),
+            ("Вилояти Хатлон",         "Хатлон"),
+            ("Ноҳияҳои тобеи ҷумҳурӣ", "НТМ"),
+            ("ВМКБ — Бадахшон",        "ВМКБ"),
         ]
+        _reg_map = {name: db_val for name, db_val in REGIONS}
 
         win = tk.Toplevel(self)
         win.title("📊 Омори база — Ноҳияҳо")
@@ -2101,7 +3524,6 @@ class DialectApp(tk.Tk):
         reg_cb.current(0)
         reg_cb.pack(side="left", padx=(4, 14))
 
-        _sbtn(sf, "＋ Илова", lambda: _open_add(), "#1a7a3a", hov="#22a050")
         _sbtn(sf, "✕ Ҳазф",  lambda: _delete(),   "#7a1a1a", hov="#b02020")
 
         cnt_lbl = tk.Label(sf, text="", bg=BG2, fg=ACC2,
@@ -2130,18 +3552,19 @@ class DialectApp(tk.Tk):
 
         def _refresh():
             q   = q_var.get().strip().lower()
-            reg = reg_cb.get()
-            if reg == "— Ҳама —": reg = ""
+            reg_display = reg_cb.get()
+            reg_db = _reg_map.get(reg_display, "") if reg_display != "— Ҳама —" else ""
             s2    = db.stats()
             pd_   = {r["name"]: r["cnt"] for r in s2.get("per_dialect", [])}
             dlist = db.get_dialects()
             tv.delete(*tv.get_children())
             count = 0
             for i, d in enumerate(dlist):
+                d_region = (d["region"] or "").strip()
                 if q and q not in d["name"].lower() and q not in d["key"].lower() \
-                       and q not in d["region"].lower():
+                       and q not in d_region.lower():
                     continue
-                if reg and reg not in d["region"]:
+                if reg_db and d_region != reg_db:
                     continue
                 cnt  = pd_.get(d["name"], 0)
                 tags = (("odd",) if i % 2 else ()) + (("empty",) if cnt == 0 else ())
@@ -2152,50 +3575,6 @@ class DialectApp(tk.Tk):
                 count += 1
             cnt_lbl.config(text=f"{count} ноҳия")
             _draw_badges()
-
-        def _open_add():
-            dlg = tk.Toplevel(win)
-            dlg.title("＋ Ноҳия илова кунед")
-            dlg.geometry("380x165")
-            dlg.configure(bg=BG)
-            dlg.grab_set()
-            dlg.resizable(False, False)
-
-            tk.Frame(dlg, bg=ACC, height=3).pack(fill="x")
-            tk.Label(dlg, text="＋  Ноҳияи нав илова кунед",
-                     font=("Segoe UI", 11, "bold"),
-                     bg=BG, fg="#e6edf3").pack(pady=(14, 2))
-
-            grid = tk.Frame(dlg, bg=BG)
-            grid.pack(fill="x", padx=20, pady=(6, 4))
-            grid.columnconfigure(1, weight=1)
-
-            tk.Label(grid, text="Ном:", bg=BG, fg=ACC2,
-                     font=FN).grid(row=0, column=0, sticky="e", padx=(0, 8), pady=6)
-            e_nom = ttk.Entry(grid, width=28, style="Stats.TEntry")
-            e_nom.grid(row=0, column=1, sticky="ew", pady=6)
-
-            msg = tk.Label(dlg, text="", bg=BG, fg=RED, font=FN)
-            msg.pack(pady=(0, 2))
-
-            def _do_save():
-                nom = e_nom.get().strip()
-                if not nom:
-                    msg.config(text="⚠  Ном холӣ!"); return
-                key = nom.lower().replace(" ", "_")[:20]
-                ok  = db.add_dialect(key, nom, "", 0)
-                if not ok:
-                    msg.config(text="⚠  Ин ном аллакай мавҷуд аст!"); return
-                _refresh()
-                dlg.destroy()
-
-            bf = tk.Frame(dlg, bg=BG)
-            bf.pack(pady=(0, 12))
-            _sbtn(bf, "✔  Захира", _do_save,      "#1a7a3a", hov="#22a050")
-            _sbtn(bf, "Бекор",     dlg.destroy,   "#424949", hov="#5a5f5f")
-
-            e_nom.bind("<Return>", lambda _: _do_save())
-            e_nom.focus_set()
 
         def _delete():
             sel = tv.selection()
