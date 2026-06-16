@@ -7,29 +7,44 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     timeout-minutes: 120
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
 
-    - name: Cache Buildozer
-      uses: actions/cache@v4
+    - uses: actions/setup-python@v4
       with:
-        path: .buildozer
-        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v5
+        python-version: '3.9'
+
+    - name: Install system libs
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y \
+          git zip unzip wget \
+          openjdk-11-jdk \
+          python3-pip \
+          autoconf libtool pkg-config \
+          zlib1g-dev libncurses5-dev \
+          libffi-dev libssl-dev cmake
+
+    - name: Install Cython + Buildozer
+      run: pip install --upgrade pip cython==0.29.33 virtualenv buildozer
+
+    - name: Cache Buildozer + Android SDK
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.buildozer
+          ~/.android
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-v6
 
     - name: Build APK
-      uses: ArtemSBulgakov/buildozer-action@v1
-      with:
-        command: android debug
-        workdir: .
-        buildozer_version: stable
+      run: buildozer android debug 2>&1
 
     - name: Upload APK
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: TajikDialect-APK
         path: bin/*.apk
-        if-no-files-found: error
         retention-days: 30
